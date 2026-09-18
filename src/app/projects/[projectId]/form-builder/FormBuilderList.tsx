@@ -1,12 +1,114 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
+import {
+  DndContext,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  arrayMove,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { GripVertical, Pencil, Plus } from "lucide-react";
 import type { FormField } from "@/lib/types";
 import { FIELD_DATA_TYPE_LABELS } from "@/lib/types";
 import { Badge, Button, IconButton } from "@/components/ui";
 import { FieldForm } from "./FieldForm";
 import { deleteFieldAction, reorderFieldsAction } from "./actions";
+
+function SortableFieldRow({
+  field,
+  fieldsById,
+  isEditing,
+  projectId,
+  existingFields,
+  onEdit,
+  onStopEditing,
+}: {
+  field: FormField;
+  fieldsById: Record<string, FormField>;
+  isEditing: boolean;
+  projectId: string;
+  existingFields: FormField[];
+  onEdit: () => void;
+  onStopEditing: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: field.id,
+    disabled: isEditing,
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  if (isEditing) {
+    return (
+      <div ref={setNodeRef} style={style}>
+        <FieldForm
+          projectId={projectId}
+          existingFields={existingFields}
+          field={field}
+          onCancel={onStopEditing}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`flex flex-wrap items-center justify-between gap-3 rounded border bg-white px-4 py-3 ${
+        isDragging ? "z-10 border-charcoal/30 shadow-lg" : "border-charcoal/15"
+      }`}
+    >
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          {...attributes}
+          {...listeners}
+          aria-label="Drag to reorder"
+          className="cursor-grab touch-none text-charcoal/30 hover:text-charcoal active:cursor-grabbing"
+        >
+          <GripVertical className="h-4 w-4" />
+        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="font-sans text-sm font-extrabold">{field.name}</span>
+          <Badge>{FIELD_DATA_TYPE_LABELS[field.data_type]}</Badge>
+          <Badge color={field.input_type === "automated" ? "teal" : "charcoal"}>
+            {field.input_type}
+          </Badge>
+          {field.input_type === "automated" && field.automation_source_field_id ? (
+            <span className="text-xs text-charcoal/50">
+              from &ldquo;{fieldsById[field.automation_source_field_id]?.name ?? "?"}&rdquo;
+            </span>
+          ) : null}
+        </div>
+      </div>
+      <div className="flex items-center gap-2">
+        <IconButton type="button" aria-label="Edit field" onClick={onEdit} className="h-7 w-7 p-0">
+          <Pencil className="h-3.5 w-3.5" />
+        </IconButton>
+        <form action={deleteFieldAction}>
+          <input type="hidden" name="id" value={field.id} />
+          <input type="hidden" name="projectId" value={projectId} />
+          <Button variant="danger" type="submit" className="px-2 py-1 text-xs">
+            Remove
+          </Button>
+        </form>
+      </div>
+    </div>
+  );
+}
 
 export function FormBuilderList({
   projectId,
@@ -18,9 +120,10 @@ export function FormBuilderList({
   const [addOpen, setAddOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [orderedFields, setOrderedFields] = useState(fields);
-  const [dragId, setDragId] = useState<string | null>(null);
-  const [dragOverId, setDragOverId] = useState<string | null>(null);
   const [, startTransition] = useTransition();
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+  );
 
   useEffect(() => {
     setOrderedFields(fields);
@@ -28,110 +131,54 @@ export function FormBuilderList({
 
   const fieldsById = Object.fromEntries(fields.map((f) => [f.id, f]));
 
-  function handleDrop(targetId: string) {
-    const sourceId = dragId;
-    setDragId(null);
-    setDragOverId(null);
-    if (!sourceId || sourceId === targetId) return;
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
 
-    setOrderedFields((prev) => {
-      const from = prev.findIndex((f) => f.id === sourceId);
-      const to = prev.findIndex((f) => f.id === targetId);
-      if (from === -1 || to === -1) return prev;
+    const from = orderedFields.findIndex((f) => f.id === active.id);
+    const to = orderedFields.findIndex((f) => f.id === over.id);
+    if (from === -1 || to === -1) return;
 
-      const next = [...prev];
-      const [moved] = next.splice(from, 1);
-      next.splice(to, 0, moved);
+    const next = arrayMove(orderedFields, from, to);
+    setOrderedFields(next);
 
-      startTransition(() => {
-        reorderFieldsAction(projectId, next.map((f) => f.id));
-      });
-
-      return next;
+    startTransition(() => {
+      reorderFieldsAction(
+        projectId,
+        next.map((f) => f.id),
+      );
     });
   }
 
   return (
     <div className="flex flex-col gap-3">
-      {orderedFields.map((f) =>
-        editingId === f.id ? (
-          <FieldForm
-            key={f.id}
-            projectId={projectId}
-            existingFields={fields}
-            field={f}
-            onCancel={() => setEditingId(null)}
-          />
-        ) : (
-          <div
-            key={f.id}
-            onDragOver={(e) => {
-              e.preventDefault();
-              if (dragOverId !== f.id) setDragOverId(f.id);
-            }}
-            onDrop={(e) => {
-              e.preventDefault();
-              handleDrop(f.id);
-            }}
-            className={`flex flex-wrap items-center justify-between gap-3 rounded border bg-white px-4 py-3 transition ${
-              dragOverId === f.id && dragId && dragId !== f.id
-                ? "border-teal bg-teal/5"
-                : "border-charcoal/15"
-            } ${dragId === f.id ? "opacity-40" : ""}`}
-          >
-            <div className="flex items-center gap-3">
-              <span
-                draggable
-                onDragStart={(e) => {
-                  setDragId(f.id);
-                  e.dataTransfer.effectAllowed = "move";
-                  e.dataTransfer.setData("text/plain", f.id);
-                }}
-                onDragEnd={() => {
-                  setDragId(null);
-                  setDragOverId(null);
-                }}
-                aria-label="Drag to reorder"
-                className="cursor-grab text-charcoal/30 hover:text-charcoal active:cursor-grabbing"
-              >
-                <GripVertical className="h-4 w-4" />
-              </span>
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="font-sans text-sm font-extrabold">{f.name}</span>
-                <Badge>{FIELD_DATA_TYPE_LABELS[f.data_type]}</Badge>
-                <Badge color={f.input_type === "automated" ? "teal" : "charcoal"}>
-                  {f.input_type}
-                </Badge>
-                {f.input_type === "automated" && f.automation_source_field_id ? (
-                  <span className="text-xs text-charcoal/50">
-                    from &ldquo;{fieldsById[f.automation_source_field_id]?.name ?? "?"}&rdquo;
-                  </span>
-                ) : null}
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <IconButton
-                type="button"
-                aria-label="Edit field"
-                onClick={() => {
-                  setAddOpen(false);
-                  setEditingId(f.id);
-                }}
-                className="h-7 w-7 p-0"
-              >
-                <Pencil className="h-3.5 w-3.5" />
-              </IconButton>
-              <form action={deleteFieldAction}>
-                <input type="hidden" name="id" value={f.id} />
-                <input type="hidden" name="projectId" value={projectId} />
-                <Button variant="danger" type="submit" className="px-2 py-1 text-xs">
-                  Remove
-                </Button>
-              </form>
-            </div>
-          </div>
-        ),
-      )}
+      <DndContext
+        id="form-builder-fields"
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragEnd={handleDragEnd}
+      >
+        <SortableContext
+          items={orderedFields.map((f) => f.id)}
+          strategy={verticalListSortingStrategy}
+        >
+          {orderedFields.map((f) => (
+            <SortableFieldRow
+              key={f.id}
+              field={f}
+              fieldsById={fieldsById}
+              isEditing={editingId === f.id}
+              projectId={projectId}
+              existingFields={fields}
+              onEdit={() => {
+                setAddOpen(false);
+                setEditingId(f.id);
+              }}
+              onStopEditing={() => setEditingId(null)}
+            />
+          ))}
+        </SortableContext>
+      </DndContext>
 
       {fields.length === 0 ? (
         <p className="rounded border border-dashed border-charcoal/25 px-4 py-6 text-center text-sm text-charcoal/50">
