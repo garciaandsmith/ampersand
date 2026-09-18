@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import {
   DndContext,
   PointerSensor,
@@ -21,24 +21,32 @@ import type { FormField } from "@/lib/types";
 import { FIELD_DATA_TYPE_LABELS } from "@/lib/types";
 import { Badge, Button, IconButton } from "@/components/ui";
 import { FieldForm } from "./FieldForm";
-import { deleteFieldAction, reorderFieldsAction } from "./actions";
+import { saveFormAction } from "./actions";
+import {
+  createDraftId,
+  toDraftField,
+  toDraftFieldInput,
+  type DraftField,
+} from "./draft";
 
 function SortableFieldRow({
   field,
   fieldsById,
   isEditing,
-  projectId,
   existingFields,
   onEdit,
+  onSubmitEdit,
   onStopEditing,
+  onRemove,
 }: {
-  field: FormField;
-  fieldsById: Record<string, FormField>;
+  field: DraftField;
+  fieldsById: Record<string, DraftField>;
   isEditing: boolean;
-  projectId: string;
-  existingFields: FormField[];
+  existingFields: DraftField[];
   onEdit: () => void;
+  onSubmitEdit: (values: Omit<DraftField, "id">) => void;
   onStopEditing: () => void;
+  onRemove: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: field.id,
@@ -54,9 +62,9 @@ function SortableFieldRow({
     return (
       <div ref={setNodeRef} style={style}>
         <FieldForm
-          projectId={projectId}
           existingFields={existingFields}
           field={field}
+          onSubmit={onSubmitEdit}
           onCancel={onStopEditing}
         />
       </div>
@@ -98,15 +106,23 @@ function SortableFieldRow({
         <IconButton type="button" aria-label="Edit field" onClick={onEdit} className="h-7 w-7 p-0">
           <Pencil className="h-3.5 w-3.5" />
         </IconButton>
-        <form action={deleteFieldAction}>
-          <input type="hidden" name="id" value={field.id} />
-          <input type="hidden" name="projectId" value={projectId} />
-          <Button variant="danger" type="submit" className="px-2 py-1 text-xs">
-            Remove
-          </Button>
-        </form>
+        <Button variant="danger" type="button" onClick={onRemove} className="px-2 py-1 text-xs">
+          Remove
+        </Button>
       </div>
     </div>
+  );
+}
+
+function sameField(a: DraftField, b: DraftField) {
+  return (
+    a.id === b.id &&
+    a.name === b.name &&
+    a.data_type === b.data_type &&
+    a.input_type === b.input_type &&
+    a.automation_source_field_id === b.automation_source_field_id &&
+    a.automation_prompt === b.automation_prompt &&
+    JSON.stringify(a.options) === JSON.stringify(b.options)
   );
 }
 
@@ -117,88 +133,90 @@ export function FormBuilderList({
   projectId: string;
   fields: FormField[];
 }) {
+  const savedFields = useMemo(() => fields.map(toDraftField), [fields]);
+  const [draftFields, setDraftFields] = useState<DraftField[]>(savedFields);
+  const [syncedFields, setSyncedFields] = useState(savedFields);
   const [addOpen, setAddOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [orderedFields, setOrderedFields] = useState(fields);
-  const [orderDirty, setOrderDirty] = useState(false);
   const [isSaving, startTransition] = useTransition();
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
   );
 
-  useEffect(() => {
-    if (orderDirty) {
-      // Reconcile with fields added/edited/removed elsewhere without
-      // discarding the reorder the user hasn't saved yet.
-      setOrderedFields((prev) => {
-        const byId = new Map(fields.map((f) => [f.id, f]));
-        const kept = prev.filter((f) => byId.has(f.id)).map((f) => byId.get(f.id)!);
-        const keptIds = new Set(kept.map((f) => f.id));
-        return [...kept, ...fields.filter((f) => !keptIds.has(f.id))];
-      });
-      return;
-    }
-    setOrderedFields(fields);
-  }, [fields, orderDirty]);
+  // Reset the draft whenever the server state changes (only happens right
+  // after this component's own save completes, since nothing else writes
+  // to fields outside of saveFormAction).
+  if (savedFields !== syncedFields) {
+    setSyncedFields(savedFields);
+    setDraftFields(savedFields);
+  }
+
+  const dirty =
+    draftFields.length !== savedFields.length ||
+    draftFields.some((f, i) => !sameField(f, savedFields[i]));
 
   useEffect(() => {
-    if (!orderDirty) return;
+    if (!dirty) return;
     function handleBeforeUnload(e: BeforeUnloadEvent) {
       e.preventDefault();
       e.returnValue = "";
     }
     window.addEventListener("beforeunload", handleBeforeUnload);
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [orderDirty]);
+  }, [dirty]);
 
-  const fieldsById = Object.fromEntries(fields.map((f) => [f.id, f]));
+  const fieldsById = Object.fromEntries(draftFields.map((f) => [f.id, f]));
 
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
 
-    const from = orderedFields.findIndex((f) => f.id === active.id);
-    const to = orderedFields.findIndex((f) => f.id === over.id);
+    const from = draftFields.findIndex((f) => f.id === active.id);
+    const to = draftFields.findIndex((f) => f.id === over.id);
     if (from === -1 || to === -1) return;
 
-    setOrderedFields(arrayMove(orderedFields, from, to));
-    setOrderDirty(true);
+    setDraftFields(arrayMove(draftFields, from, to));
   }
 
-  function handleSaveOrder() {
+  function handleAddField(values: Omit<DraftField, "id">) {
+    setDraftFields((prev) => [...prev, { id: createDraftId(), ...values }]);
+  }
+
+  function handleUpdateField(id: string, values: Omit<DraftField, "id">) {
+    setDraftFields((prev) => prev.map((f) => (f.id === id ? { id, ...values } : f)));
+    setEditingId(null);
+  }
+
+  function handleRemoveField(id: string) {
+    setDraftFields((prev) => prev.filter((f) => f.id !== id));
+  }
+
+  function handleSave() {
     startTransition(async () => {
-      await reorderFieldsAction(
-        projectId,
-        orderedFields.map((f) => f.id),
-      );
-      setOrderDirty(false);
+      await saveFormAction(projectId, draftFields.map(toDraftFieldInput));
     });
   }
 
-  function handleDiscardOrder() {
-    setOrderedFields(fields);
-    setOrderDirty(false);
+  function handleDiscard() {
+    setDraftFields(savedFields);
+    setAddOpen(false);
+    setEditingId(null);
   }
 
   return (
     <div className="flex flex-col gap-3">
-      {orderDirty ? (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded border border-yellow bg-yellow/15 px-4 py-3">
+      {dirty ? (
+        <div className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-3 rounded border border-yellow bg-yellow/15 px-4 py-3 shadow-sm">
           <p className="text-sm font-semibold text-charcoal">
-            Field order changed. Save to apply it to the input form, the record detail
-            page, and the table&rsquo;s column selector.
+            This form has unsaved changes. Save to apply them to the input form, the
+            record detail page, and the table&rsquo;s column selector.
           </p>
           <div className="flex items-center gap-2">
-            <Button type="button" onClick={handleSaveOrder} disabled={isSaving}>
-              {isSaving ? "Saving…" : "Save order"}
+            <Button type="button" onClick={handleSave} disabled={isSaving}>
+              {isSaving ? "Saving…" : "Save form"}
             </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={handleDiscardOrder}
-              disabled={isSaving}
-            >
-              Discard
+            <Button type="button" variant="ghost" onClick={handleDiscard} disabled={isSaving}>
+              Discard changes
             </Button>
           </div>
         </div>
@@ -211,28 +229,29 @@ export function FormBuilderList({
         onDragEnd={handleDragEnd}
       >
         <SortableContext
-          items={orderedFields.map((f) => f.id)}
+          items={draftFields.map((f) => f.id)}
           strategy={verticalListSortingStrategy}
         >
-          {orderedFields.map((f) => (
+          {draftFields.map((f) => (
             <SortableFieldRow
               key={f.id}
               field={f}
               fieldsById={fieldsById}
               isEditing={editingId === f.id}
-              projectId={projectId}
-              existingFields={fields}
+              existingFields={draftFields}
               onEdit={() => {
                 setAddOpen(false);
                 setEditingId(f.id);
               }}
+              onSubmitEdit={(values) => handleUpdateField(f.id, values)}
               onStopEditing={() => setEditingId(null)}
+              onRemove={() => handleRemoveField(f.id)}
             />
           ))}
         </SortableContext>
       </DndContext>
 
-      {fields.length === 0 ? (
+      {draftFields.length === 0 ? (
         <p className="rounded border border-dashed border-charcoal/25 px-4 py-6 text-center text-sm text-charcoal/50">
           No fields yet. Add your first one below.
         </p>
@@ -240,9 +259,8 @@ export function FormBuilderList({
 
       {addOpen ? (
         <FieldForm
-          key={fields.length}
-          projectId={projectId}
-          existingFields={fields}
+          existingFields={draftFields}
+          onSubmit={handleAddField}
           onCancel={() => setAddOpen(false)}
         />
       ) : (

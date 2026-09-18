@@ -78,6 +78,18 @@ export async function deleteField(id: string): Promise<void> {
   if (error) throw new Error(error.message);
 }
 
+export async function updateFieldAutomationSource(
+  id: string,
+  automationSourceFieldId: string,
+): Promise<void> {
+  const { error } = await supabaseAdmin()
+    .from("form_fields")
+    .update({ automation_source_field_id: automationSourceFieldId })
+    .eq("id", id);
+
+  if (error) throw new Error(error.message);
+}
+
 export async function updateFieldOrder(id: string, sortOrder: number): Promise<void> {
   const { error } = await supabaseAdmin()
     .from("form_fields")

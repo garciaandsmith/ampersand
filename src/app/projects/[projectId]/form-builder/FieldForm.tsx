@@ -1,23 +1,23 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { X } from "lucide-react";
-import type { FormField, FieldDataType } from "@/lib/types";
+import type { FieldDataType } from "@/lib/types";
 import { FIELD_DATA_TYPE_LABELS } from "@/lib/types";
 import { Button, Field, Input, Label, Select, Textarea } from "@/components/ui";
-import { createFieldAction, updateFieldAction } from "./actions";
+import type { DraftField } from "./draft";
 
 const DATA_TYPES = Object.keys(FIELD_DATA_TYPE_LABELS) as FieldDataType[];
 
 export function FieldForm({
-  projectId,
   existingFields,
   field,
+  onSubmit,
   onCancel,
 }: {
-  projectId: string;
-  existingFields: FormField[];
-  field?: FormField;
+  existingFields: DraftField[];
+  field?: DraftField;
+  onSubmit: (values: Omit<DraftField, "id">) => void;
   onCancel: () => void;
 }) {
   const isEditing = Boolean(field);
@@ -41,19 +41,39 @@ export function FieldForm({
   }, [dirty]);
 
   function handleCancel() {
-    if (dirty && !window.confirm("Leave without saving? Your changes won't be kept.")) {
+    if (dirty && !window.confirm("Discard your changes to this field?")) {
       return;
     }
     onCancel();
   }
 
-  async function handleSubmit(formData: FormData) {
-    if (isEditing) {
-      await updateFieldAction(formData);
-      onCancel();
-    } else {
-      await createFieldAction(formData);
+  function handleSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const name = String(formData.get("name") ?? "").trim();
+    const optionsRaw = String(formData.get("options") ?? "").trim();
+    const options = optionsRaw
+      ? optionsRaw.split(",").map((o) => o.trim()).filter(Boolean)
+      : null;
+    const automationSourceFieldId =
+      String(formData.get("automationSourceFieldId") ?? "") || null;
+    const automationPrompt = String(formData.get("automationPrompt") ?? "").trim() || null;
+
+    onSubmit({
+      name,
+      data_type: dataType,
+      options,
+      input_type: inputType,
+      automation_source_field_id: inputType === "automated" ? automationSourceFieldId : null,
+      automation_prompt: inputType === "automated" ? automationPrompt : null,
+    });
+
+    if (!isEditing) {
+      e.currentTarget.reset();
+      setDataType("text");
+      setInputType("manual");
     }
+    setDirty(false);
   }
 
   return (
@@ -72,10 +92,11 @@ export function FieldForm({
         </button>
       </div>
 
-      <form action={handleSubmit} onChange={() => setDirty(true)} className="flex flex-col gap-2">
-        <input type="hidden" name="projectId" value={projectId} />
-        {isEditing ? <input type="hidden" name="id" value={field!.id} /> : null}
-
+      <form
+        onSubmit={handleSubmit}
+        onChange={() => setDirty(true)}
+        className="flex flex-col gap-2"
+      >
         <Field>
           <Label>Name</Label>
           <Input name="name" placeholder="e.g. Tags" defaultValue={field?.name} required />
@@ -151,7 +172,7 @@ export function FieldForm({
 
         <div className="flex items-center gap-2">
           <Button type="submit" className="self-start">
-            Save field
+            {isEditing ? "Update field" : "Add field"}
           </Button>
           <Button type="button" variant="ghost" onClick={handleCancel} className="self-start">
             Cancel

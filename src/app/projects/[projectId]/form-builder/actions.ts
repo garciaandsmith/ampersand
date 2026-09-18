@@ -6,72 +6,96 @@ import {
   deleteField,
   listFields,
   updateField,
+  updateFieldAutomationSource,
   updateFieldOrder,
 } from "@/lib/data/fields";
 import type { FieldDataType, InputType } from "@/lib/types";
 
-function parseFieldInput(formData: FormData) {
-  const name = String(formData.get("name") ?? "").trim();
-  const dataType = String(formData.get("dataType") ?? "") as FieldDataType;
-  const inputType = String(formData.get("inputType") ?? "manual") as InputType;
-  const automationSourceFieldId =
-    String(formData.get("automationSourceFieldId") ?? "") || null;
-  const automationPrompt = String(formData.get("automationPrompt") ?? "").trim() || null;
-  const optionsRaw = String(formData.get("options") ?? "").trim();
-  const options = optionsRaw
-    ? optionsRaw.split(",").map((o) => o.trim()).filter(Boolean)
-    : null;
+export type DraftFieldInput = {
+  id: string;
+  name: string;
+  dataType: FieldDataType;
+  options: string[] | null;
+  inputType: InputType;
+  automationSourceFieldId: string | null;
+  automationPrompt: string | null;
+};
 
-  if (!name || !dataType) {
-    throw new Error("Name and data type are required");
-  }
-  if (inputType === "automated" && (!automationSourceFieldId || !automationPrompt)) {
-    throw new Error("Automated fields need a source field and a prompt");
-  }
+const isNewId = (id: string) => id.startsWith("new:");
 
-  return { name, dataType, inputType, automationSourceFieldId, automationPrompt, options };
-}
-
-export async function createFieldAction(formData: FormData) {
-  const projectId = String(formData.get("projectId") ?? "");
+// Persists the whole form in one go: creates, updates, and deletes are
+// diffed against the current DB state, and the incoming array order
+// becomes the new sort_order. A new field can reference another new
+// field as its automation source (a forward reference to a row that
+// doesn't have a real id yet), so ids are resolved in two passes.
+export async function saveFormAction(projectId: string, draftFields: DraftFieldInput[]) {
   if (!projectId) throw new Error("Project is required");
 
-  const input = parseFieldInput(formData);
+  for (const f of draftFields) {
+    if (!f.name.trim() || !f.dataType) {
+      throw new Error("Every field needs a name and a data type");
+    }
+    if (f.inputType === "automated" && (!f.automationSourceFieldId || !f.automationPrompt?.trim())) {
+      throw new Error("Automated fields need a source field and a prompt");
+    }
+  }
+
   const existing = await listFields(projectId);
+  const incomingIds = new Set(draftFields.filter((f) => !isNewId(f.id)).map((f) => f.id));
 
-  await createField({
-    projectId,
-    ...input,
-    sortOrder: existing.length,
-  });
+  const toDelete = existing.filter((f) => !incomingIds.has(f.id));
+  await Promise.all(toDelete.map((f) => deleteField(f.id)));
 
-  revalidatePath(`/projects/${projectId}/form-builder`);
-}
+  const idMap = new Map<string, string>();
+  const deferred: { realId: string; tempSourceId: string }[] = [];
 
-export async function updateFieldAction(formData: FormData) {
-  const id = String(formData.get("id") ?? "");
-  const projectId = String(formData.get("projectId") ?? "");
-  if (!id || !projectId) throw new Error("Missing field id or project id");
+  for (let i = 0; i < draftFields.length; i++) {
+    const f = draftFields[i];
+    const sourceIsTemp = f.automationSourceFieldId ? isNewId(f.automationSourceFieldId) : false;
+    const resolvedSource = f.automationSourceFieldId
+      ? sourceIsTemp
+        ? (idMap.get(f.automationSourceFieldId) ?? null)
+        : f.automationSourceFieldId
+      : null;
+    const sourceStillPending = sourceIsTemp && resolvedSource === null;
 
-  const input = parseFieldInput(formData);
-  await updateField(id, input);
+    if (isNewId(f.id)) {
+      const created = await createField({
+        projectId,
+        name: f.name,
+        dataType: f.dataType,
+        options: f.options,
+        inputType: f.inputType,
+        automationSourceFieldId: sourceStillPending ? null : resolvedSource,
+        automationPrompt: f.automationPrompt,
+        sortOrder: i,
+      });
+      idMap.set(f.id, created.id);
+      if (sourceStillPending) {
+        deferred.push({ realId: created.id, tempSourceId: f.automationSourceFieldId! });
+      }
+    } else {
+      await updateField(f.id, {
+        name: f.name,
+        dataType: f.dataType,
+        options: f.options,
+        inputType: f.inputType,
+        automationSourceFieldId: sourceStillPending ? null : resolvedSource,
+        automationPrompt: f.automationPrompt,
+      });
+      await updateFieldOrder(f.id, i);
+      if (sourceStillPending) {
+        deferred.push({ realId: f.id, tempSourceId: f.automationSourceFieldId! });
+      }
+    }
+  }
 
-  revalidatePath(`/projects/${projectId}/form-builder`);
-}
-
-export async function deleteFieldAction(formData: FormData) {
-  const id = String(formData.get("id") ?? "");
-  const projectId = String(formData.get("projectId") ?? "");
-  if (!id || !projectId) throw new Error("Missing field id or project id");
-
-  await deleteField(id);
-  revalidatePath(`/projects/${projectId}/form-builder`);
-}
-
-export async function reorderFieldsAction(projectId: string, orderedIds: string[]) {
-  if (!projectId || orderedIds.length === 0) return;
-
-  await Promise.all(orderedIds.map((id, index) => updateFieldOrder(id, index)));
+  for (const d of deferred) {
+    const resolved = idMap.get(d.tempSourceId);
+    if (resolved) {
+      await updateFieldAutomationSource(d.realId, resolved);
+    }
+  }
 
   revalidatePath(`/projects/${projectId}/form-builder`);
 }
