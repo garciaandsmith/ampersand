@@ -81,7 +81,7 @@ export function ArchiveExplorer({
           }
         }
         if (!query) return true;
-        const haystack = [item.file_name ?? "", ...Object.values(values).map((v) => v.value_text ?? "")]
+        const haystack = [item.title ?? "", ...Object.values(values).map((v) => v.value_text ?? "")]
           .join(" ")
           .toLowerCase();
         return haystack.includes(query);
@@ -173,7 +173,7 @@ export function ArchiveExplorer({
         <Table>
           <thead>
             <tr>
-              <Th>File</Th>
+              <Th>Title</Th>
               {visibleColumns.map((c) => (
                 <Th key={c.id}>{c.name}</Th>
               ))}
@@ -188,7 +188,7 @@ export function ArchiveExplorer({
                     href={`/projects/${projectId}/archive/${item.id}`}
                     className="font-bold text-charcoal underline decoration-yellow decoration-2 underline-offset-2 hover:text-charcoal/70"
                   >
-                    {item.file_name ?? "Untitled"}
+                    {item.title ?? "Untitled"}
                   </Link>
                 </td>
                 {visibleColumns.map((c) => {

@@ -18,7 +18,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { GripVertical, Pencil, Plus } from "lucide-react";
 import type { FormField } from "@/lib/types";
-import { FIELD_DATA_TYPE_LABELS } from "@/lib/types";
+import { FIELD_DATA_TYPE_LABELS, SKILL_LABELS } from "@/lib/types";
 import { Badge, Button, IconButton } from "@/components/ui";
 import { FieldForm } from "./FieldForm";
 import { saveFormAction } from "./actions";
@@ -95,6 +95,9 @@ function SortableFieldRow({
           <Badge color={field.input_type === "automated" ? "teal" : "charcoal"}>
             {field.input_type}
           </Badge>
+          {field.input_type === "automated" && field.skill_key ? (
+            <Badge color="teal">{SKILL_LABELS[field.skill_key]}</Badge>
+          ) : null}
           {field.input_type === "automated" && field.automation_source_field_id ? (
             <span className="text-xs text-charcoal/50">
               from &ldquo;{fieldsById[field.automation_source_field_id]?.name ?? "?"}&rdquo;
@@ -149,6 +152,9 @@ function sameField(a: DraftField, b: DraftField) {
     a.input_type === b.input_type &&
     a.automation_source_field_id === b.automation_source_field_id &&
     a.automation_prompt === b.automation_prompt &&
+    a.skill_key === b.skill_key &&
+    a.automation_provider_override_id === b.automation_provider_override_id &&
+    a.automation_model_override === b.automation_model_override &&
     JSON.stringify(a.options) === JSON.stringify(b.options)
   );
 }

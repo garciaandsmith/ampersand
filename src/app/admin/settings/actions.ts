@@ -1,8 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createProvider, deleteProvider, setTaskAssignment } from "@/lib/data/providers";
-import type { TaskKey } from "@/lib/types";
+import { createProvider, deleteProvider, getProvider, setSkillAssignment } from "@/lib/data/providers";
+import { listAvailableModels, type AvailableModel } from "@/lib/ai/client";
+import type { SkillKey } from "@/lib/types";
 
 export async function createProviderAction(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
@@ -24,13 +25,20 @@ export async function deleteProviderAction(formData: FormData) {
   revalidatePath("/admin/settings");
 }
 
-export async function setTaskAssignmentAction(formData: FormData) {
-  const taskKey = String(formData.get("taskKey") ?? "") as TaskKey;
+export async function setSkillAssignmentAction(formData: FormData) {
+  const skillKey = String(formData.get("skillKey") ?? "") as SkillKey;
   const providerId = String(formData.get("providerId") ?? "") || null;
   const model = String(formData.get("model") ?? "").trim() || null;
 
-  if (!taskKey) throw new Error("Missing task key");
+  if (!skillKey) throw new Error("Missing skill key");
 
-  await setTaskAssignment({ taskKey, providerId, model });
+  await setSkillAssignment({ skillKey, providerId, model });
   revalidatePath("/admin/settings");
+}
+
+export async function listAvailableModelsAction(providerId: string): Promise<AvailableModel[]> {
+  if (!providerId) throw new Error("Missing provider id");
+  const provider = await getProvider(providerId);
+  if (!provider) throw new Error("Unknown provider");
+  return listAvailableModels(provider);
 }

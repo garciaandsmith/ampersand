@@ -46,7 +46,7 @@ export default async function ArchiveItemPage({
     <div className="flex flex-col gap-6">
       <div className="flex items-start justify-between">
         <div>
-          <h2 className="font-sans text-lg font-extrabold">{fileName ?? "Untitled record"}</h2>
+          <h2 className="font-sans text-lg font-extrabold">{item.title ?? "Untitled record"}</h2>
           <p className="text-xs text-charcoal/50">
             Created {new Date(item.created_at).toLocaleString()}
           </p>
@@ -90,6 +90,7 @@ export default async function ArchiveItemPage({
         manualFields={manualFields}
         automatedFields={automatedFields}
         initialValues={initialValues}
+        initialTitle={item.title ?? ""}
       />
     </div>
   );

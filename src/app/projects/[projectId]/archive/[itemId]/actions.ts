@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { deleteArchiveItem, setItemValue } from "@/lib/data/archive";
+import { deleteArchiveItem, setItemValue, updateArchiveItemTitle } from "@/lib/data/archive";
 import { listFields } from "@/lib/data/fields";
 
 export async function updateArchiveItemAction(formData: FormData) {
@@ -10,8 +10,11 @@ export async function updateArchiveItemAction(formData: FormData) {
   const itemId = String(formData.get("itemId") ?? "");
   const valuesRaw = String(formData.get("values") ?? "{}");
   const values = JSON.parse(valuesRaw) as Record<string, string>;
+  const title = String(formData.get("title") ?? "").trim();
 
   if (!projectId || !itemId) throw new Error("Missing project or item id");
+
+  await updateArchiveItemTitle(itemId, title || null);
 
   const fields = await listFields(projectId);
   await Promise.all(
