@@ -9,19 +9,7 @@ import {
   updateFieldAutomationSource,
   updateFieldOrder,
 } from "@/lib/data/fields";
-import type { FieldDataType, InputType } from "@/lib/types";
-
-export type DraftFieldInput = {
-  id: string;
-  name: string;
-  dataType: FieldDataType;
-  options: string[] | null;
-  inputType: InputType;
-  automationSourceFieldId: string | null;
-  automationPrompt: string | null;
-};
-
-const isNewId = (id: string) => id.startsWith("new:");
+import { isNewDraftId, type DraftFieldInput } from "./draft";
 
 // Persists the whole form in one go: creates, updates, and deletes are
 // diffed against the current DB state, and the incoming array order
@@ -41,7 +29,7 @@ export async function saveFormAction(projectId: string, draftFields: DraftFieldI
   }
 
   const existing = await listFields(projectId);
-  const incomingIds = new Set(draftFields.filter((f) => !isNewId(f.id)).map((f) => f.id));
+  const incomingIds = new Set(draftFields.filter((f) => !isNewDraftId(f.id)).map((f) => f.id));
 
   const toDelete = existing.filter((f) => !incomingIds.has(f.id));
   await Promise.all(toDelete.map((f) => deleteField(f.id)));
@@ -51,7 +39,7 @@ export async function saveFormAction(projectId: string, draftFields: DraftFieldI
 
   for (let i = 0; i < draftFields.length; i++) {
     const f = draftFields[i];
-    const sourceIsTemp = f.automationSourceFieldId ? isNewId(f.automationSourceFieldId) : false;
+    const sourceIsTemp = f.automationSourceFieldId ? isNewDraftId(f.automationSourceFieldId) : false;
     const resolvedSource = f.automationSourceFieldId
       ? sourceIsTemp
         ? (idMap.get(f.automationSourceFieldId) ?? null)
@@ -59,7 +47,7 @@ export async function saveFormAction(projectId: string, draftFields: DraftFieldI
       : null;
     const sourceStillPending = sourceIsTemp && resolvedSource === null;
 
-    if (isNewId(f.id)) {
+    if (isNewDraftId(f.id)) {
       const created = await createField({
         projectId,
         name: f.name,

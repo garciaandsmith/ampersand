@@ -1,5 +1,4 @@
 import type { FieldDataType, FormField, InputType } from "@/lib/types";
-import type { DraftFieldInput } from "./actions";
 
 export type DraftField = {
   id: string;
@@ -9,6 +8,16 @@ export type DraftField = {
   input_type: InputType;
   automation_source_field_id: string | null;
   automation_prompt: string | null;
+};
+
+export type DraftFieldInput = {
+  id: string;
+  name: string;
+  dataType: FieldDataType;
+  options: string[] | null;
+  inputType: InputType;
+  automationSourceFieldId: string | null;
+  automationPrompt: string | null;
 };
 
 const NEW_ID_PREFIX = "new:";
