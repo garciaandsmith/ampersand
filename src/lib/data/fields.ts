@@ -48,3 +48,12 @@ export async function deleteField(id: string): Promise<void> {
   const { error } = await supabaseAdmin().from("form_fields").delete().eq("id", id);
   if (error) throw new Error(error.message);
 }
+
+export async function updateFieldOrder(id: string, sortOrder: number): Promise<void> {
+  const { error } = await supabaseAdmin()
+    .from("form_fields")
+    .update({ sort_order: sortOrder })
+    .eq("id", id);
+
+  if (error) throw new Error(error.message);
+}

@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createField, deleteField, listFields } from "@/lib/data/fields";
+import { createField, deleteField, listFields, updateFieldOrder } from "@/lib/data/fields";
 import type { FieldDataType, InputType } from "@/lib/types";
 
 export async function createFieldAction(formData: FormData) {
@@ -46,5 +46,29 @@ export async function deleteFieldAction(formData: FormData) {
   if (!id || !projectId) throw new Error("Missing field id or project id");
 
   await deleteField(id);
+  revalidatePath(`/projects/${projectId}/form-builder`);
+}
+
+export async function moveFieldAction(formData: FormData) {
+  const id = String(formData.get("id") ?? "");
+  const projectId = String(formData.get("projectId") ?? "");
+  const direction = String(formData.get("direction") ?? "");
+  if (!id || !projectId || (direction !== "up" && direction !== "down")) {
+    throw new Error("Missing or invalid reorder parameters");
+  }
+
+  const fields = await listFields(projectId);
+  const index = fields.findIndex((f) => f.id === id);
+  const swapIndex = direction === "up" ? index - 1 : index + 1;
+  if (index === -1 || swapIndex < 0 || swapIndex >= fields.length) return;
+
+  const current = fields[index];
+  const swapWith = fields[swapIndex];
+
+  await Promise.all([
+    updateFieldOrder(current.id, swapWith.sort_order),
+    updateFieldOrder(swapWith.id, current.sort_order),
+  ]);
+
   revalidatePath(`/projects/${projectId}/form-builder`);
 }

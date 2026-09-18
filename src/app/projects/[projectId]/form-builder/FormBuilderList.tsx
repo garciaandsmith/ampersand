@@ -1,12 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, X } from "lucide-react";
+import { ChevronDown, ChevronUp, Plus } from "lucide-react";
 import type { FormField } from "@/lib/types";
 import { FIELD_DATA_TYPE_LABELS } from "@/lib/types";
-import { Badge, Button } from "@/components/ui";
+import { Badge, Button, IconButton } from "@/components/ui";
 import { FieldForm } from "./FieldForm";
-import { deleteFieldAction } from "./actions";
+import { deleteFieldAction, moveFieldAction } from "./actions";
 
 export function FormBuilderList({
   projectId,
@@ -20,7 +20,7 @@ export function FormBuilderList({
 
   return (
     <div className="flex flex-col gap-3">
-      {fields.map((f) => (
+      {fields.map((f, index) => (
         <div
           key={f.id}
           className="flex flex-wrap items-center justify-between gap-3 rounded border border-charcoal/15 bg-white px-4 py-3"
@@ -37,13 +37,43 @@ export function FormBuilderList({
               </span>
             ) : null}
           </div>
-          <form action={deleteFieldAction}>
-            <input type="hidden" name="id" value={f.id} />
-            <input type="hidden" name="projectId" value={projectId} />
-            <Button variant="danger" type="submit" className="px-2 py-1 text-xs">
-              Remove
-            </Button>
-          </form>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1">
+              <form action={moveFieldAction}>
+                <input type="hidden" name="id" value={f.id} />
+                <input type="hidden" name="projectId" value={projectId} />
+                <input type="hidden" name="direction" value="up" />
+                <IconButton
+                  type="submit"
+                  aria-label="Move field up"
+                  disabled={index === 0}
+                  className="h-7 w-7 p-0"
+                >
+                  <ChevronUp className="h-4 w-4" />
+                </IconButton>
+              </form>
+              <form action={moveFieldAction}>
+                <input type="hidden" name="id" value={f.id} />
+                <input type="hidden" name="projectId" value={projectId} />
+                <input type="hidden" name="direction" value="down" />
+                <IconButton
+                  type="submit"
+                  aria-label="Move field down"
+                  disabled={index === fields.length - 1}
+                  className="h-7 w-7 p-0"
+                >
+                  <ChevronDown className="h-4 w-4" />
+                </IconButton>
+              </form>
+            </div>
+            <form action={deleteFieldAction}>
+              <input type="hidden" name="id" value={f.id} />
+              <input type="hidden" name="projectId" value={projectId} />
+              <Button variant="danger" type="submit" className="px-2 py-1 text-xs">
+                Remove
+              </Button>
+            </form>
+          </div>
         </div>
       ))}
 
@@ -54,20 +84,12 @@ export function FormBuilderList({
       ) : null}
 
       {addOpen ? (
-        <div className="rounded border border-charcoal/15 bg-white p-6">
-          <div className="mb-3 flex items-center justify-between">
-            <h3 className="font-sans text-sm font-extrabold">New field</h3>
-            <button
-              type="button"
-              onClick={() => setAddOpen(false)}
-              aria-label="Cancel"
-              className="text-charcoal/40 hover:text-charcoal"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-          <FieldForm projectId={projectId} existingFields={fields} />
-        </div>
+        <FieldForm
+          key={fields.length}
+          projectId={projectId}
+          existingFields={fields}
+          onCancel={() => setAddOpen(false)}
+        />
       ) : (
         <Button variant="ghost" onClick={() => setAddOpen(true)} className="self-start">
           <Plus className="h-4 w-4" /> New field
