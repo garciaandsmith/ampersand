@@ -44,6 +44,35 @@ export async function createField(input: {
   return data;
 }
 
+export async function updateField(
+  id: string,
+  input: {
+    name: string;
+    dataType: FieldDataType;
+    options?: string[] | null;
+    inputType: InputType;
+    automationSourceFieldId?: string | null;
+    automationPrompt?: string | null;
+  },
+): Promise<FormField> {
+  const { data, error } = await supabaseAdmin()
+    .from("form_fields")
+    .update({
+      name: input.name,
+      data_type: input.dataType,
+      options: input.options ?? null,
+      input_type: input.inputType,
+      automation_source_field_id: input.automationSourceFieldId ?? null,
+      automation_prompt: input.automationPrompt ?? null,
+    })
+    .eq("id", id)
+    .select("*")
+    .single();
+
+  if (error) throw new Error(error.message);
+  return data;
+}
+
 export async function deleteField(id: string): Promise<void> {
   const { error } = await supabaseAdmin().from("form_fields").delete().eq("id", id);
   if (error) throw new Error(error.message);

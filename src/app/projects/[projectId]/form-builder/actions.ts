@@ -1,11 +1,16 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createField, deleteField, listFields, updateFieldOrder } from "@/lib/data/fields";
+import {
+  createField,
+  deleteField,
+  listFields,
+  updateField,
+  updateFieldOrder,
+} from "@/lib/data/fields";
 import type { FieldDataType, InputType } from "@/lib/types";
 
-export async function createFieldAction(formData: FormData) {
-  const projectId = String(formData.get("projectId") ?? "");
+function parseFieldInput(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   const dataType = String(formData.get("dataType") ?? "") as FieldDataType;
   const inputType = String(formData.get("inputType") ?? "manual") as InputType;
@@ -17,25 +22,39 @@ export async function createFieldAction(formData: FormData) {
     ? optionsRaw.split(",").map((o) => o.trim()).filter(Boolean)
     : null;
 
-  if (!projectId || !name || !dataType) {
-    throw new Error("Project, name, and data type are required");
+  if (!name || !dataType) {
+    throw new Error("Name and data type are required");
   }
   if (inputType === "automated" && (!automationSourceFieldId || !automationPrompt)) {
     throw new Error("Automated fields need a source field and a prompt");
   }
 
+  return { name, dataType, inputType, automationSourceFieldId, automationPrompt, options };
+}
+
+export async function createFieldAction(formData: FormData) {
+  const projectId = String(formData.get("projectId") ?? "");
+  if (!projectId) throw new Error("Project is required");
+
+  const input = parseFieldInput(formData);
   const existing = await listFields(projectId);
 
   await createField({
     projectId,
-    name,
-    dataType,
-    options,
-    inputType,
-    automationSourceFieldId,
-    automationPrompt,
+    ...input,
     sortOrder: existing.length,
   });
+
+  revalidatePath(`/projects/${projectId}/form-builder`);
+}
+
+export async function updateFieldAction(formData: FormData) {
+  const id = String(formData.get("id") ?? "");
+  const projectId = String(formData.get("projectId") ?? "");
+  if (!id || !projectId) throw new Error("Missing field id or project id");
+
+  const input = parseFieldInput(formData);
+  await updateField(id, input);
 
   revalidatePath(`/projects/${projectId}/form-builder`);
 }
@@ -49,26 +68,10 @@ export async function deleteFieldAction(formData: FormData) {
   revalidatePath(`/projects/${projectId}/form-builder`);
 }
 
-export async function moveFieldAction(formData: FormData) {
-  const id = String(formData.get("id") ?? "");
-  const projectId = String(formData.get("projectId") ?? "");
-  const direction = String(formData.get("direction") ?? "");
-  if (!id || !projectId || (direction !== "up" && direction !== "down")) {
-    throw new Error("Missing or invalid reorder parameters");
-  }
+export async function reorderFieldsAction(projectId: string, orderedIds: string[]) {
+  if (!projectId || orderedIds.length === 0) return;
 
-  const fields = await listFields(projectId);
-  const index = fields.findIndex((f) => f.id === id);
-  const swapIndex = direction === "up" ? index - 1 : index + 1;
-  if (index === -1 || swapIndex < 0 || swapIndex >= fields.length) return;
-
-  const current = fields[index];
-  const swapWith = fields[swapIndex];
-
-  await Promise.all([
-    updateFieldOrder(current.id, swapWith.sort_order),
-    updateFieldOrder(swapWith.id, current.sort_order),
-  ]);
+  await Promise.all(orderedIds.map((id, index) => updateFieldOrder(id, index)));
 
   revalidatePath(`/projects/${projectId}/form-builder`);
 }
