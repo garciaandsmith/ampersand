@@ -114,6 +114,33 @@ function SortableFieldRow({
   );
 }
 
+function SaveButton({
+  dirty,
+  isSaving,
+  onSave,
+}: {
+  dirty: boolean;
+  isSaving: boolean;
+  onSave: () => void;
+}) {
+  return (
+    <div className="flex justify-end">
+      <button
+        type="button"
+        onClick={onSave}
+        disabled={!dirty || isSaving}
+        className={`inline-flex items-center justify-center rounded px-4 py-2 text-sm font-bold transition ${
+          dirty
+            ? "bg-yellow text-charcoal hover:brightness-95"
+            : "cursor-not-allowed bg-charcoal/10 text-charcoal/40"
+        }`}
+      >
+        {isSaving ? "Saving…" : "Save"}
+      </button>
+    </div>
+  );
+}
+
 function sameField(a: DraftField, b: DraftField) {
   return (
     a.id === b.id &&
@@ -197,30 +224,9 @@ export function FormBuilderList({
     });
   }
 
-  function handleDiscard() {
-    setDraftFields(savedFields);
-    setAddOpen(false);
-    setEditingId(null);
-  }
-
   return (
     <div className="flex flex-col gap-3">
-      {dirty ? (
-        <div className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-3 rounded border border-yellow bg-yellow/15 px-4 py-3 shadow-sm">
-          <p className="text-sm font-semibold text-charcoal">
-            This form has unsaved changes. Save to apply them to the input form, the
-            record detail page, and the table&rsquo;s column selector.
-          </p>
-          <div className="flex items-center gap-2">
-            <Button type="button" onClick={handleSave} disabled={isSaving}>
-              {isSaving ? "Saving…" : "Save form"}
-            </Button>
-            <Button type="button" variant="ghost" onClick={handleDiscard} disabled={isSaving}>
-              Discard changes
-            </Button>
-          </div>
-        </div>
-      ) : null}
+      <SaveButton dirty={dirty} isSaving={isSaving} onSave={handleSave} />
 
       <DndContext
         id="form-builder-fields"
@@ -275,6 +281,8 @@ export function FormBuilderList({
           <Plus className="h-4 w-4" /> New field
         </Button>
       )}
+
+      <SaveButton dirty={dirty} isSaving={isSaving} onSave={handleSave} />
     </div>
   );
 }
