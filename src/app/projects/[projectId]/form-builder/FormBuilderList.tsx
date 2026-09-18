@@ -120,14 +120,36 @@ export function FormBuilderList({
   const [addOpen, setAddOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [orderedFields, setOrderedFields] = useState(fields);
-  const [, startTransition] = useTransition();
+  const [orderDirty, setOrderDirty] = useState(false);
+  const [isSaving, startTransition] = useTransition();
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
   );
 
   useEffect(() => {
+    if (orderDirty) {
+      // Reconcile with fields added/edited/removed elsewhere without
+      // discarding the reorder the user hasn't saved yet.
+      setOrderedFields((prev) => {
+        const byId = new Map(fields.map((f) => [f.id, f]));
+        const kept = prev.filter((f) => byId.has(f.id)).map((f) => byId.get(f.id)!);
+        const keptIds = new Set(kept.map((f) => f.id));
+        return [...kept, ...fields.filter((f) => !keptIds.has(f.id))];
+      });
+      return;
+    }
     setOrderedFields(fields);
-  }, [fields]);
+  }, [fields, orderDirty]);
+
+  useEffect(() => {
+    if (!orderDirty) return;
+    function handleBeforeUnload(e: BeforeUnloadEvent) {
+      e.preventDefault();
+      e.returnValue = "";
+    }
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [orderDirty]);
 
   const fieldsById = Object.fromEntries(fields.map((f) => [f.id, f]));
 
@@ -139,19 +161,49 @@ export function FormBuilderList({
     const to = orderedFields.findIndex((f) => f.id === over.id);
     if (from === -1 || to === -1) return;
 
-    const next = arrayMove(orderedFields, from, to);
-    setOrderedFields(next);
+    setOrderedFields(arrayMove(orderedFields, from, to));
+    setOrderDirty(true);
+  }
 
-    startTransition(() => {
-      reorderFieldsAction(
+  function handleSaveOrder() {
+    startTransition(async () => {
+      await reorderFieldsAction(
         projectId,
-        next.map((f) => f.id),
+        orderedFields.map((f) => f.id),
       );
+      setOrderDirty(false);
     });
+  }
+
+  function handleDiscardOrder() {
+    setOrderedFields(fields);
+    setOrderDirty(false);
   }
 
   return (
     <div className="flex flex-col gap-3">
+      {orderDirty ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded border border-yellow bg-yellow/15 px-4 py-3">
+          <p className="text-sm font-semibold text-charcoal">
+            Field order changed. Save to apply it to the input form, the record detail
+            page, and the table&rsquo;s column selector.
+          </p>
+          <div className="flex items-center gap-2">
+            <Button type="button" onClick={handleSaveOrder} disabled={isSaving}>
+              {isSaving ? "Saving…" : "Save order"}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={handleDiscardOrder}
+              disabled={isSaving}
+            >
+              Discard
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
       <DndContext
         id="form-builder-fields"
         sensors={sensors}
