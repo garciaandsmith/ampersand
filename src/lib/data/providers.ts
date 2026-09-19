@@ -1,5 +1,6 @@
 import "server-only";
 import { supabaseAdmin } from "@/lib/supabase/server";
+import { NO_PARAMS, type GenerationParams } from "@/lib/ai/models";
 import type { AiProvider, AiProviderPublic, AiSkill, ChatSettings } from "@/lib/types";
 
 export async function listProviders(): Promise<AiProviderPublic[]> {
@@ -43,7 +44,7 @@ export async function deleteProvider(id: string): Promise<void> {
   if (error) throw new Error(error.message);
 }
 
-/** Skills are just named provider+model shortcuts, fully admin-managed. */
+/** Skills are admin-managed recipes: a name, a provider + model, and optional tuning. */
 export async function listSkills(): Promise<AiSkill[]> {
   const { data, error } = await supabaseAdmin()
     .from("ai_skills")
@@ -54,14 +55,25 @@ export async function listSkills(): Promise<AiSkill[]> {
   return data;
 }
 
-export async function createSkill(input: {
+type SkillInput = {
   name: string;
   providerId: string | null;
   model: string | null;
-}): Promise<AiSkill> {
+  params: GenerationParams;
+  instructions: string | null;
+};
+
+export async function createSkill(input: SkillInput): Promise<AiSkill> {
   const { data, error } = await supabaseAdmin()
     .from("ai_skills")
-    .insert({ name: input.name, provider_id: input.providerId, model: input.model })
+    .insert({
+      name: input.name,
+      provider_id: input.providerId,
+      model: input.model,
+      effort: input.params.effort,
+      max_output_tokens: input.params.maxOutputTokens,
+      instructions: input.instructions,
+    })
     .select("*")
     .single();
 
@@ -69,16 +81,16 @@ export async function createSkill(input: {
   return data;
 }
 
-export async function updateSkill(
-  id: string,
-  input: { name: string; providerId: string | null; model: string | null },
-): Promise<AiSkill> {
+export async function updateSkill(id: string, input: SkillInput): Promise<AiSkill> {
   const { data, error } = await supabaseAdmin()
     .from("ai_skills")
     .update({
       name: input.name,
       provider_id: input.providerId,
       model: input.model,
+      effort: input.params.effort,
+      max_output_tokens: input.params.maxOutputTokens,
+      instructions: input.instructions,
       updated_at: new Date().toISOString(),
     })
     .eq("id", id)
@@ -122,14 +134,32 @@ export async function setChatSettings(input: {
   return data;
 }
 
-type ResolvedModel = { provider: AiProvider; model: string };
+export type ResolvedModel = {
+  provider: AiProvider;
+  model: string;
+  params: GenerationParams;
+  /** Standing instructions from the skill, added to the system prompt. Null for chat and blank skills. */
+  instructions: string | null;
+};
 
 function toResolved(
-  row: { provider_id: string | null; model: string | null } | null,
+  row: {
+    provider_id: string | null;
+    model: string | null;
+    effort?: AiSkill["effort"];
+    max_output_tokens?: number | null;
+    instructions?: string | null;
+  } | null,
 ): ResolvedModel | null {
   if (!row || !row.provider_id || !row.model) return null;
   const provider = (row as unknown as { ai_providers: AiProvider | null }).ai_providers;
-  return provider ? { provider, model: row.model } : null;
+  if (!provider) return null;
+  // Only skill rows carry tuning; chat settings resolve with no overrides.
+  const params: GenerationParams =
+    row.effort !== undefined || row.max_output_tokens !== undefined
+      ? { effort: row.effort ?? null, maxOutputTokens: row.max_output_tokens ?? null }
+      : NO_PARAMS;
+  return { provider, model: row.model, params, instructions: row.instructions?.trim() || null };
 }
 
 /** Resolves the Create chat assistant's configured provider (with API key) + model. Server-only. */

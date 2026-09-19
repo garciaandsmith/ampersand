@@ -1,7 +1,7 @@
 import "server-only";
-import { resolveChatProvider } from "@/lib/data/providers";
+import { resolveChatProvider, type ResolvedModel } from "@/lib/data/providers";
 import { generateText } from "@/lib/ai/client";
-import type { AiProvider, FieldDataType } from "@/lib/types";
+import type { FieldDataType } from "@/lib/types";
 
 export type GenerationSource =
   | { kind: "text"; text: string }
@@ -43,7 +43,7 @@ export async function runFieldGeneration(input: {
   dataType: FieldDataType;
   options: string[] | null;
   source?: GenerationSource;
-  resolved: { provider: AiProvider; model: string };
+  resolved: ResolvedModel;
 }): Promise<string> {
   const format = outputInstruction(input.dataType, input.options);
 
@@ -76,13 +76,22 @@ export async function runFieldGeneration(input: {
     }
   }
 
+  const system = ["You produce values for the fields of a content archive."];
+  if (input.resolved.instructions) {
+    system.push(
+      "Follow these instructions from the skill you are running when you write the value:",
+      input.resolved.instructions,
+    );
+  }
+
   return generateText({
     provider: input.resolved.provider,
     model: input.resolved.model,
-    system: "You produce values for the fields of a content archive.",
+    system: system.join("\n\n"),
     prompt: lines.join("\n"),
     imageBase64,
     documentBase64,
+    params: input.resolved.params,
   });
 }
 

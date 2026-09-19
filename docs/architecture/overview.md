@@ -84,15 +84,25 @@ runner, so the SQL history stays legible.
 
 ## Skills
 
-A "skill" (`ampersand.ai_skills`, `src/lib/data/providers.ts`) is nothing
-more than an admin-managed, freeform name attached to a provider+model pair.
-Admins create/rename/delete skills and assign each one a provider+model in
-Admin → Settings; the Form Builder's skill picker just selects one by name
-for an automated field (`form_fields.skill_id`). Picking a skill carries no
-other implication — it doesn't require a source field, a prompt, or any
-particular source field type. That used to be true (a fixed six-skill enum
-where e.g. `image_recognition` required a file-type source field); it was
-deliberately simplified away to avoid clutter.
+A "skill" (`ampersand.ai_skills`, `src/lib/data/providers.ts`) is an
+admin-managed, freeform name attached to a "recipe": a provider + model, plus
+an optional effort level and output-token limit (`effort`,
+`max_output_tokens`; null = the model's default), and optional standing
+`instructions` (markdown, e.g. an SEO/GEO writing guide). Instructions are
+appended to the system prompt in `runFieldGeneration`; the field's own prompt
+still says *what* to write, the skill's instructions say *how*. Admins
+create/rename/delete skills and set the recipe in Admin → Settings; the Form Builder's skill
+picker just selects one by name for an automated field
+(`form_fields.skill_id`). Picking a skill carries no other implication — it
+doesn't require a source field, a prompt, or any particular source field
+type. That used to be true (a fixed six-skill enum where e.g.
+`image_recognition` required a file-type source field); it was deliberately
+simplified away to avoid clutter.
+
+Which effort levels and token ceiling a model accepts lives in
+`MODEL_CATALOG` (`src/lib/ai/models.ts`); the admin form only offers what the
+chosen model supports, and `generateText()` drops anything unsupported before
+calling the provider. See [ADR 0006](../decisions/0006-skill-recipe-parameters.md).
 
 ## Automated fields
 

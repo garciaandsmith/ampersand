@@ -2,6 +2,7 @@ import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
 import type { AiProvider } from "@/lib/types";
+import { DEFAULT_MAX_OUTPUT_TOKENS, NO_PARAMS, normalizeParams, type GenerationParams } from "@/lib/ai/models";
 
 export type AvailableModel = {
   id: string;
@@ -52,11 +53,19 @@ export type GenerateTextInput = {
    * only works when `provider.type === "anthropic"`.
    */
   documentBase64?: { mediaType: "application/pdf"; data: string };
+  /**
+   * Optional tuning (effort, output-token limit). Anything the chosen model
+   * doesn't support is dropped rather than sent, so a stale setting can't
+   * cause an API error. Omitted/null values fall back to the model's default.
+   */
+  params?: GenerationParams;
 };
 
 /** Calls the given provider/model and returns the plain-text response. Server-only. */
 export async function generateText(input: GenerateTextInput): Promise<string> {
   const { provider, model, system, prompt, imageBase64, documentBase64 } = input;
+  const { effort, maxOutputTokens } = normalizeParams(provider.type, model, input.params ?? NO_PARAMS);
+  const maxTokens = maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS;
 
   if (provider.type === "anthropic") {
     const client = new Anthropic({ apiKey: provider.api_key });
@@ -100,9 +109,10 @@ export async function generateText(input: GenerateTextInput): Promise<string> {
 
     const response = await client.messages.create({
       model,
-      max_tokens: 1024,
+      max_tokens: maxTokens,
       system,
       messages: [{ role: "user", content }],
+      ...(effort ? { output_config: { effort } } : {}),
     });
 
     return response.content
@@ -133,6 +143,8 @@ export async function generateText(input: GenerateTextInput): Promise<string> {
 
     const response = await client.chat.completions.create({
       model,
+      max_completion_tokens: maxTokens,
+      ...(effort ? { reasoning_effort: effort } : {}),
       messages: [
         ...(system ? [{ role: "system" as const, content: system }] : []),
         { role: "user", content },
