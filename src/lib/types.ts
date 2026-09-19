@@ -17,58 +17,25 @@ export type AiProvider = {
 
 export type AiProviderPublic = Omit<AiProvider, "api_key">;
 
-export type SkillKey =
-  | "field_automation"
-  | "summary_generation"
-  | "image_recognition"
-  | "text_generation"
-  | "document_parsing"
-  | "image_generation";
-
-export const SKILL_LABELS: Record<SkillKey, string> = {
-  field_automation: "Automated form fields",
-  summary_generation: "Summary generation",
-  image_recognition: "Image recognition",
-  text_generation: "Text generation / chat",
-  document_parsing: "Document parsing",
-  image_generation: "Image generation",
-};
-
-export type AiSkillAssignment = {
-  skill_key: SkillKey;
+/**
+ * A skill is just a named shortcut for a provider+model pair, managed by an
+ * admin in Settings. Picking one in the Form Builder does nothing beyond
+ * selecting which provider/model an automated field uses — it carries no
+ * other requirements (source field, prompt) for the field it's attached to.
+ */
+export type AiSkill = {
+  id: string;
+  name: string;
   provider_id: string | null;
   model: string | null;
+  created_at: string;
   updated_at: string;
 };
 
-/** Whether an automated field using this skill needs a source field picked. */
-export const SKILL_NEEDS_SOURCE_FIELD: Record<SkillKey, boolean> = {
-  field_automation: true,
-  summary_generation: true,
-  image_recognition: true,
-  document_parsing: true,
-  text_generation: false,
-  image_generation: false,
-};
-
-/** Whether an automated field using this skill needs a prompt filled in (vs. an optional/default one). */
-export const SKILL_NEEDS_PROMPT: Record<SkillKey, boolean> = {
-  field_automation: true,
-  summary_generation: false,
-  image_recognition: false,
-  document_parsing: false,
-  text_generation: true,
-  image_generation: true,
-};
-
-/** Which source-field data types make sense for each skill (e.g. image_recognition needs a file field). */
-export const SKILL_SOURCE_FIELD_FILTER: Record<SkillKey, (dataType: FieldDataType) => boolean> = {
-  field_automation: (dt) => dt !== "file",
-  summary_generation: (dt) => dt !== "file",
-  image_recognition: (dt) => dt === "file",
-  document_parsing: (dt) => dt === "file",
-  text_generation: () => true,
-  image_generation: () => true,
+/** The Create chat assistant's provider+model, configured separately from the skills list. */
+export type ChatSettings = {
+  provider_id: string | null;
+  model: string | null;
 };
 
 export type FieldDataType =
@@ -105,11 +72,8 @@ export type FormField = {
   input_type: InputType;
   automation_source_field_id: string | null;
   automation_prompt: string | null;
-  /** Which AI skill governs this field's generation. Null on legacy rows created before this column existed. */
-  skill_key: SkillKey | null;
-  /** Owner/admin-only per-field override of the skill's default provider (see ADR 0003 — no role system yet). */
-  automation_provider_override_id: string | null;
-  automation_model_override: string | null;
+  /** Which skill's provider+model this field's generation uses. Null on legacy rows or manual fields. */
+  skill_id: string | null;
   sort_order: number;
   is_core: boolean;
   created_at: string;

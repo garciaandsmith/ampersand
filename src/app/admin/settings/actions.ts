@@ -1,9 +1,16 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createProvider, deleteProvider, getProvider, setSkillAssignment } from "@/lib/data/providers";
+import {
+  createProvider,
+  createSkill,
+  deleteProvider,
+  deleteSkill,
+  getProvider,
+  setChatSettings,
+  updateSkill,
+} from "@/lib/data/providers";
 import { listAvailableModels, type AvailableModel } from "@/lib/ai/client";
-import type { SkillKey } from "@/lib/types";
 
 export async function createProviderAction(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
@@ -25,14 +32,42 @@ export async function deleteProviderAction(formData: FormData) {
   revalidatePath("/admin/settings");
 }
 
-export async function setSkillAssignmentAction(formData: FormData) {
-  const skillKey = String(formData.get("skillKey") ?? "") as SkillKey;
+export async function createSkillAction(formData: FormData) {
+  const name = String(formData.get("name") ?? "").trim();
   const providerId = String(formData.get("providerId") ?? "") || null;
   const model = String(formData.get("model") ?? "").trim() || null;
 
-  if (!skillKey) throw new Error("Missing skill key");
+  if (!name) throw new Error("Name is required");
 
-  await setSkillAssignment({ skillKey, providerId, model });
+  await createSkill({ name, providerId, model });
+  revalidatePath("/admin/settings");
+}
+
+export async function updateSkillAction(formData: FormData) {
+  const id = String(formData.get("id") ?? "");
+  const name = String(formData.get("name") ?? "").trim();
+  const providerId = String(formData.get("providerId") ?? "") || null;
+  const model = String(formData.get("model") ?? "").trim() || null;
+
+  if (!id) throw new Error("Missing skill id");
+  if (!name) throw new Error("Name is required");
+
+  await updateSkill(id, { name, providerId, model });
+  revalidatePath("/admin/settings");
+}
+
+export async function deleteSkillAction(formData: FormData) {
+  const id = String(formData.get("id") ?? "");
+  if (!id) throw new Error("Missing skill id");
+  await deleteSkill(id);
+  revalidatePath("/admin/settings");
+}
+
+export async function setChatSettingsAction(formData: FormData) {
+  const providerId = String(formData.get("providerId") ?? "") || null;
+  const model = String(formData.get("model") ?? "").trim() || null;
+
+  await setChatSettings({ providerId, model });
   revalidatePath("/admin/settings");
 }
 

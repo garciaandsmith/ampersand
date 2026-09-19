@@ -1,139 +1,106 @@
 import "server-only";
-import { resolveSkillProvider } from "@/lib/data/providers";
+import { resolveChatProvider } from "@/lib/data/providers";
 import { generateText } from "@/lib/ai/client";
-import type { AiProvider } from "@/lib/types";
+import type { AiProvider, FieldDataType } from "@/lib/types";
 
-type Resolved = { provider: AiProvider; model: string };
+export type GenerationSource =
+  | { kind: "text"; text: string }
+  | { kind: "file"; mediaType: string; dataBase64: string };
 
-export class SkillNotConfiguredError extends Error {
-  constructor(skillKey: string) {
-    super(
-      `No AI provider is assigned to the "${skillKey}" skill yet. Configure it in Admin → Settings.`,
-    );
-    this.name = "SkillNotConfiguredError";
+/** What the model must return so the value fits the field's data type. */
+function outputInstruction(dataType: FieldDataType, options: string[] | null): string {
+  const list = (options ?? []).join(", ");
+  switch (dataType) {
+    case "text":
+      return "Plain text on a single line.";
+    case "long_text":
+      return "Plain text. Multiple sentences or paragraphs are fine.";
+    case "number":
+      return "A single number only, with no units or text.";
+    case "date":
+      return "A single date in YYYY-MM-DD format only.";
+    case "single_select":
+      return `Exactly one of these options, copied verbatim: ${list}.`;
+    case "multi_select":
+      return `One or more of these options, copied verbatim, separated by commas: ${list}.`;
+    case "tags":
+      return "A comma-separated list of short tags.";
+    case "url":
+      return "A single URL only.";
+    case "file":
+      throw new Error("Generating a file or image as output isn't supported yet.");
   }
 }
 
 /**
- * Runs the "field_automation" skill: fills one automated form field from an
- * input value + prompt. `resolved` lets a caller pass a per-field
- * provider/model override; otherwise this resolves the skill's default from
- * Admin > Settings.
+ * Generic automated-field generation: read the source (if any), follow the
+ * prompt, and answer in the format of the field's data type, using whichever
+ * provider/model the field's skill points at.
  */
-export async function runFieldAutomation(input: {
+export async function runFieldGeneration(input: {
   fieldName: string;
-  automationPrompt: string;
-  sourceValue: string;
-  resolved?: Resolved;
+  prompt: string;
+  dataType: FieldDataType;
+  options: string[] | null;
+  source?: GenerationSource;
+  resolved: { provider: AiProvider; model: string };
 }): Promise<string> {
-  const resolved = input.resolved ?? (await resolveSkillProvider("field_automation"));
-  if (!resolved) throw new SkillNotConfiguredError("field_automation");
+  const format = outputInstruction(input.dataType, input.options);
 
-  const prompt = [
+  const lines = [
     `You are filling in the "${input.fieldName}" field of a content archive record.`,
-    `Instruction: ${input.automationPrompt}`,
+    `Instruction: ${input.prompt}`,
+  ];
+  if (input.source?.kind === "text") {
+    lines.push("", "Source content:", input.source.text);
+  } else if (input.source?.kind === "file") {
+    lines.push("", "The source content is attached.");
+  }
+  lines.push(
     "",
-    "Source content:",
-    input.sourceValue,
-    "",
+    `Required output format: ${format}`,
     "Respond with only the value for the field — no preamble, no explanation.",
-  ].join("\n");
+  );
 
-  return generateText({
-    provider: resolved.provider,
-    model: resolved.model,
-    system: "You produce concise, structured metadata for a content archive.",
-    prompt,
-  });
-}
-
-/** Runs the "summary_generation" skill: summarizes a text field's content. */
-export async function runSummaryGeneration(input: {
-  fieldName: string;
-  sourceValue: string;
-  instructions?: string;
-  resolved?: Resolved;
-}): Promise<string> {
-  const resolved = input.resolved ?? (await resolveSkillProvider("summary_generation"));
-  if (!resolved) throw new SkillNotConfiguredError("summary_generation");
-
-  const prompt = [
-    `You are writing the "${input.fieldName}" field of a content archive record — a summary.`,
-    input.instructions ? `Instruction: ${input.instructions}` : "Write a concise summary.",
-    "",
-    "Source content:",
-    input.sourceValue,
-    "",
-    "Respond with only the summary — no preamble, no explanation.",
-  ].join("\n");
-
-  return generateText({
-    provider: resolved.provider,
-    model: resolved.model,
-    system: "You write concise, accurate summaries for a content archive.",
-    prompt,
-  });
-}
-
-/** Runs the "image_recognition" skill: describes an uploaded image. */
-export async function runImageRecognition(input: {
-  imageBase64: string;
-  mediaType: string;
-  prompt: string;
-  resolved?: Resolved;
-}): Promise<string> {
-  const resolved = input.resolved ?? (await resolveSkillProvider("image_recognition"));
-  if (!resolved) throw new SkillNotConfiguredError("image_recognition");
-
-  return generateText({
-    provider: resolved.provider,
-    model: resolved.model,
-    system: "You describe images clearly and factually for a content archive.",
-    prompt: input.prompt,
-    imageBase64: { mediaType: input.mediaType, data: input.imageBase64 },
-  });
-}
-
-/**
- * Runs the "document_parsing" skill: extracts/summarizes an uploaded
- * document's content. Only PDFs are supported today, and only when the
- * skill resolves to an Anthropic provider (native PDF input, no extra
- * library). DOCX and other non-PDF formats, and PDF-via-OpenAI, need a
- * text-extraction library (e.g. `pdf-parse`) or the OpenAI Files API — not
- * added here; see generateText()'s documentBase64 handling.
- */
-export async function runDocumentParsing(input: {
-  documentBase64: string;
-  mediaType: string;
-  prompt: string;
-  resolved?: Resolved;
-}): Promise<string> {
-  const resolved = input.resolved ?? (await resolveSkillProvider("document_parsing"));
-  if (!resolved) throw new SkillNotConfiguredError("document_parsing");
-
-  if (input.mediaType !== "application/pdf") {
-    throw new Error(
-      `Document parsing only supports PDF files right now (got "${input.mediaType}"). Extracting text from other formats needs a parsing library (e.g. mammoth for .docx) — none is wired up yet.`,
-    );
+  let imageBase64: { mediaType: string; data: string } | undefined;
+  let documentBase64: { mediaType: "application/pdf"; data: string } | undefined;
+  if (input.source?.kind === "file") {
+    if (input.source.mediaType.startsWith("image/")) {
+      imageBase64 = { mediaType: input.source.mediaType, data: input.source.dataBase64 };
+    } else if (input.source.mediaType === "application/pdf") {
+      documentBase64 = { mediaType: "application/pdf", data: input.source.dataBase64 };
+    } else {
+      throw new Error(
+        `Source files of type "${input.source.mediaType}" aren't supported — only images and PDFs.`,
+      );
+    }
   }
 
   return generateText({
-    provider: resolved.provider,
-    model: resolved.model,
-    system: "You extract and summarize the content of documents for a content archive.",
-    prompt: input.prompt,
-    documentBase64: { mediaType: "application/pdf", data: input.documentBase64 },
+    provider: input.resolved.provider,
+    model: input.resolved.model,
+    system: "You produce values for the fields of a content archive.",
+    prompt: lines.join("\n"),
+    imageBase64,
+    documentBase64,
   });
 }
 
-/** Runs the "text_generation" skill: answers a question grounded in retrieved archive snippets. */
+export class ChatNotConfiguredError extends Error {
+  constructor() {
+    super("No AI provider is assigned to the Create chat assistant yet. Configure it in Admin → Settings.");
+    this.name = "ChatNotConfiguredError";
+  }
+}
+
+/** Answers a question grounded in retrieved archive snippets. */
 export async function runChatAnswer(input: {
   question: string;
   history: { role: "user" | "assistant"; content: string }[];
   contextSnippets: string[];
 }): Promise<string> {
-  const resolved = await resolveSkillProvider("text_generation");
-  if (!resolved) throw new SkillNotConfiguredError("text_generation");
+  const resolved = await resolveChatProvider();
+  if (!resolved) throw new ChatNotConfiguredError();
 
   const context =
     input.contextSnippets.length > 0

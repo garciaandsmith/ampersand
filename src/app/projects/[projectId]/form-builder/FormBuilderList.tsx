@@ -17,8 +17,8 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { GripVertical, Pencil, Plus } from "lucide-react";
-import type { FormField } from "@/lib/types";
-import { FIELD_DATA_TYPE_LABELS, SKILL_LABELS } from "@/lib/types";
+import type { AiSkill, FormField } from "@/lib/types";
+import { FIELD_DATA_TYPE_LABELS } from "@/lib/types";
 import { Badge, Button, IconButton } from "@/components/ui";
 import { FieldForm } from "./FieldForm";
 import { saveFormAction } from "./actions";
@@ -32,6 +32,8 @@ import {
 function SortableFieldRow({
   field,
   fieldsById,
+  skills,
+  skillsById,
   isEditing,
   existingFields,
   onEdit,
@@ -41,6 +43,8 @@ function SortableFieldRow({
 }: {
   field: DraftField;
   fieldsById: Record<string, DraftField>;
+  skills: AiSkill[];
+  skillsById: Record<string, AiSkill>;
   isEditing: boolean;
   existingFields: DraftField[];
   onEdit: () => void;
@@ -63,6 +67,7 @@ function SortableFieldRow({
       <div ref={setNodeRef} style={style}>
         <FieldForm
           existingFields={existingFields}
+          skills={skills}
           field={field}
           onSubmit={onSubmitEdit}
           onCancel={onStopEditing}
@@ -95,8 +100,8 @@ function SortableFieldRow({
           <Badge color={field.input_type === "automated" ? "teal" : "charcoal"}>
             {field.input_type}
           </Badge>
-          {field.input_type === "automated" && field.skill_key ? (
-            <Badge color="teal">{SKILL_LABELS[field.skill_key]}</Badge>
+          {field.input_type === "automated" && field.skill_id ? (
+            <Badge color="teal">{skillsById[field.skill_id]?.name ?? "Unknown skill"}</Badge>
           ) : null}
           {field.input_type === "automated" && field.automation_source_field_id ? (
             <span className="text-xs text-charcoal/50">
@@ -152,9 +157,7 @@ function sameField(a: DraftField, b: DraftField) {
     a.input_type === b.input_type &&
     a.automation_source_field_id === b.automation_source_field_id &&
     a.automation_prompt === b.automation_prompt &&
-    a.skill_key === b.skill_key &&
-    a.automation_provider_override_id === b.automation_provider_override_id &&
-    a.automation_model_override === b.automation_model_override &&
+    a.skill_id === b.skill_id &&
     JSON.stringify(a.options) === JSON.stringify(b.options)
   );
 }
@@ -162,9 +165,11 @@ function sameField(a: DraftField, b: DraftField) {
 export function FormBuilderList({
   projectId,
   fields,
+  skills,
 }: {
   projectId: string;
   fields: FormField[];
+  skills: AiSkill[];
 }) {
   const savedFields = useMemo(() => fields.map(toDraftField), [fields]);
   const [draftFields, setDraftFields] = useState<DraftField[]>(savedFields);
@@ -199,6 +204,7 @@ export function FormBuilderList({
   }, [dirty]);
 
   const fieldsById = Object.fromEntries(draftFields.map((f) => [f.id, f]));
+  const skillsById = Object.fromEntries(skills.map((s) => [s.id, s]));
 
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
@@ -249,6 +255,8 @@ export function FormBuilderList({
               key={f.id}
               field={f}
               fieldsById={fieldsById}
+              skills={skills}
+              skillsById={skillsById}
               isEditing={editingId === f.id}
               existingFields={draftFields}
               onEdit={() => {
@@ -272,6 +280,7 @@ export function FormBuilderList({
       {addOpen ? (
         <FieldForm
           existingFields={draftFields}
+          skills={skills}
           onSubmit={handleAddField}
           onCancel={() => setAddOpen(false)}
         />

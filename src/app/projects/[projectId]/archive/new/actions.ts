@@ -10,22 +10,16 @@ import {
   setItemValue,
   uploadArchiveFile,
 } from "@/lib/data/archive";
-import { resolveFieldAutomationProvider } from "@/lib/data/providers";
-import {
-  runDocumentParsing,
-  runFieldAutomation,
-  runImageRecognition,
-  runSummaryGeneration,
-} from "@/lib/ai/tasks";
+import { resolveSkill } from "@/lib/data/providers";
+import { runFieldGeneration, type GenerationSource } from "@/lib/ai/tasks";
 import type { FormField } from "@/lib/types";
 
 type FilePayload = { name: string; type: string; dataBase64: string };
 
 /**
- * Locates the file bytes a file-sourced skill (image_recognition,
- * document_parsing) needs: either a not-yet-uploaded file passed straight
- * from the browser (create flow, before the item/file exists in storage),
- * or an already-uploaded file fetched from storage (edit flow, via itemId).
+ * Finds the bytes of a file-type source field: either a not-yet-uploaded
+ * file sent straight from the browser (create flow), or an already-uploaded
+ * one fetched from storage (edit flow, via itemId).
  */
 async function resolveSourceFile(
   sourceField: FormField,
@@ -47,12 +41,18 @@ async function resolveSourceFile(
   return { name: meta?.name ?? "file", type: meta?.type ?? "application/octet-stream", dataBase64 };
 }
 
+/**
+ * Generates automated fields. Each field is self-describing: its source
+ * (what to read), prompt (what to do), data type + options (the output
+ * format) and skill (which provider/model to ask). Fields whose source is
+ * configured but empty, or that have no prompt, are skipped.
+ */
 export async function generateAutomatedFieldsAction(input: {
   projectId: string;
   manualValues: Record<string, string>;
   /** Not-yet-saved files, base64-encoded client-side, keyed by source field id — used by the create flow before an item exists. */
   manualFiles?: Record<string, FilePayload>;
-  /** When editing an existing item, lets file-sourced skills fetch the already-uploaded file from storage. */
+  /** When editing an existing item, lets file sources be fetched from storage. */
   itemId?: string;
   /** When set, only this field is (re)generated instead of every automated field. */
   fieldId?: string;
@@ -66,64 +66,38 @@ export async function generateAutomatedFieldsAction(input: {
   const results: Record<string, string> = {};
   await Promise.all(
     automated.map(async (f) => {
-      const skill = f.skill_key ?? "field_automation";
       try {
-        const resolved = (await resolveFieldAutomationProvider(f)) ?? undefined;
+        const prompt = f.automation_prompt?.trim();
+        if (!prompt) return;
 
-        if (skill === "image_recognition" || skill === "document_parsing") {
-          const sourceField = f.automation_source_field_id
-            ? fieldsById[f.automation_source_field_id]
-            : null;
-          if (!sourceField || sourceField.data_type !== "file") return;
-
-          const file = await resolveSourceFile(sourceField, input.manualFiles, input.itemId);
-          if (!file) return;
-
-          const prompt =
-            f.automation_prompt?.trim() ||
-            (skill === "image_recognition"
-              ? "Describe this image factually for a content archive record."
-              : "Extract and summarize this document's key content for a content archive record.");
-
-          results[f.id] =
-            skill === "image_recognition"
-              ? await runImageRecognition({
-                  imageBase64: file.dataBase64,
-                  mediaType: file.type,
-                  prompt,
-                  resolved,
-                })
-              : await runDocumentParsing({
-                  documentBase64: file.dataBase64,
-                  mediaType: file.type,
-                  prompt,
-                  resolved,
-                });
-          return;
+        let source: GenerationSource | undefined;
+        const sourceField = f.automation_source_field_id
+          ? fieldsById[f.automation_source_field_id]
+          : undefined;
+        if (sourceField) {
+          if (sourceField.data_type === "file") {
+            const file = await resolveSourceFile(sourceField, input.manualFiles, input.itemId);
+            if (!file) return;
+            source = { kind: "file", mediaType: file.type, dataBase64: file.dataBase64 };
+          } else {
+            const text = input.manualValues[sourceField.id] ?? "";
+            if (!text.trim()) return;
+            source = { kind: "text", text };
+          }
         }
 
-        if (skill === "summary_generation") {
-          const sourceValue = f.automation_source_field_id
-            ? input.manualValues[f.automation_source_field_id] ?? ""
-            : "";
-          if (!sourceValue.trim()) return;
-          results[f.id] = await runSummaryGeneration({
-            fieldName: f.name,
-            sourceValue,
-            instructions: f.automation_prompt ?? undefined,
-            resolved,
-          });
-          return;
+        if (!f.skill_id) throw new Error("No skill is selected for this field.");
+        const resolved = await resolveSkill(f.skill_id);
+        if (!resolved) {
+          throw new Error("Its skill has no provider and model set — configure it in Admin → Settings.");
         }
 
-        // field_automation (also the fallback for any legacy field with no skill_key set)
-        if (!f.automation_source_field_id || !f.automation_prompt) return;
-        const sourceValue = input.manualValues[f.automation_source_field_id] ?? "";
-        if (!sourceValue.trim()) return;
-        results[f.id] = await runFieldAutomation({
+        results[f.id] = await runFieldGeneration({
           fieldName: f.name,
-          automationPrompt: f.automation_prompt,
-          sourceValue,
+          prompt,
+          dataType: f.data_type,
+          options: f.options,
+          source,
           resolved,
         });
       } catch (e) {

@@ -115,7 +115,7 @@ export async function generateText(input: GenerateTextInput): Promise<string> {
   if (provider.type === "openai") {
     if (documentBase64) {
       throw new Error(
-        "Document parsing via OpenAI isn't implemented — OpenAI's chat API needs the Files API (or a text-extraction library like pdf-parse) for PDF input. Assign the document_parsing skill to an Anthropic provider instead, which supports PDFs natively.",
+        "PDF input via OpenAI isn't implemented — OpenAI's chat API needs the Files API (or a text-extraction library like pdf-parse) for PDFs. Use a skill backed by an Anthropic model, which supports PDFs natively.",
       );
     }
     const client = new OpenAI({ apiKey: provider.api_key });

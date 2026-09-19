@@ -1,28 +1,23 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useMemo, useEffect, useState, type FormEvent } from "react";
 import { X } from "lucide-react";
-import type { FieldDataType, SkillKey } from "@/lib/types";
-import {
-  FIELD_DATA_TYPE_LABELS,
-  SKILL_LABELS,
-  SKILL_NEEDS_PROMPT,
-  SKILL_NEEDS_SOURCE_FIELD,
-  SKILL_SOURCE_FIELD_FILTER,
-} from "@/lib/types";
+import type { AiSkill, FieldDataType } from "@/lib/types";
+import { FIELD_DATA_TYPE_LABELS } from "@/lib/types";
 import { Button, Field, Input, Label, Select, Textarea } from "@/components/ui";
 import type { DraftField } from "./draft";
 
 const DATA_TYPES = Object.keys(FIELD_DATA_TYPE_LABELS) as FieldDataType[];
-const SKILL_KEYS = Object.keys(SKILL_LABELS) as SkillKey[];
 
 export function FieldForm({
   existingFields,
+  skills,
   field,
   onSubmit,
   onCancel,
 }: {
   existingFields: DraftField[];
+  skills: AiSkill[];
   field?: DraftField;
   onSubmit: (values: Omit<DraftField, "id">) => void;
   onCancel: () => void;
@@ -32,19 +27,14 @@ export function FieldForm({
   const [inputType, setInputType] = useState<"manual" | "automated">(
     field?.input_type ?? "manual",
   );
-  const [skillKey, setSkillKey] = useState<SkillKey>(field?.skill_key ?? "field_automation");
+  const [skillId, setSkillId] = useState<string>(field?.skill_id ?? skills[0]?.id ?? "");
   const [dirty, setDirty] = useState(false);
 
   const showOptions = dataType === "single_select" || dataType === "multi_select";
   const sourceOptions = useMemo(
-    () =>
-      existingFields.filter(
-        (f) => f.id !== field?.id && SKILL_SOURCE_FIELD_FILTER[skillKey](f.data_type),
-      ),
-    [existingFields, field?.id, skillKey],
+    () => existingFields.filter((f) => f.id !== field?.id),
+    [existingFields, field?.id],
   );
-  const needsSourceField = SKILL_NEEDS_SOURCE_FIELD[skillKey];
-  const needsPrompt = SKILL_NEEDS_PROMPT[skillKey];
 
   useEffect(() => {
     if (!dirty) return;
@@ -82,19 +72,14 @@ export function FieldForm({
       input_type: inputType,
       automation_source_field_id: inputType === "automated" ? automationSourceFieldId : null,
       automation_prompt: inputType === "automated" ? automationPrompt : null,
-      skill_key: inputType === "automated" ? skillKey : null,
-      // Owner/admin per-field provider+model override isn't exposed in the UI
-      // yet — pending a decision on how to gate it (see ADR 0003). Preserve
-      // whatever an existing field already has rather than clobbering it.
-      automation_provider_override_id: field?.automation_provider_override_id ?? null,
-      automation_model_override: field?.automation_model_override ?? null,
+      skill_id: inputType === "automated" ? skillId || null : null,
     });
 
     if (!isEditing) {
       e.currentTarget.reset();
       setDataType("text");
       setInputType("manual");
-      setSkillKey("field_automation");
+      setSkillId(skills[0]?.id ?? "");
     }
     setDirty(false);
   }
@@ -168,59 +153,57 @@ export function FieldForm({
             <Field>
               <Label>Skill</Label>
               <Select
-                name="skillKey"
-                value={skillKey}
-                onChange={(e) => setSkillKey(e.target.value as SkillKey)}
+                name="skillId"
+                value={skillId}
+                onChange={(e) => setSkillId(e.target.value)}
+                required
               >
-                {SKILL_KEYS.map((key) => (
-                  <option key={key} value={key}>
-                    {SKILL_LABELS[key]}
+                {skills.length === 0 ? <option value="">— no skills configured —</option> : null}
+                {skills.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
                   </option>
                 ))}
               </Select>
               <p className="mt-1 text-xs text-charcoal/50">
-                Governs which AI capability generates this field. The provider and model
-                come from this skill&rsquo;s default in Admin → Settings.
+                Picks the provider and model this field&rsquo;s generation uses, set by an
+                admin in Settings.
               </p>
             </Field>
 
-            {needsSourceField ? (
-              <Field>
-                <Label>
-                  Input (source field)
-                  {skillKey === "image_recognition" || skillKey === "document_parsing"
-                    ? " — must be a file field"
-                    : null}
-                </Label>
-                <Select
-                  name="automationSourceFieldId"
-                  defaultValue={field?.automation_source_field_id ?? ""}
-                  required
-                >
-                  <option value="">— select a field —</option>
-                  {sourceOptions.map((f) => (
-                    <option key={f.id} value={f.id}>
-                      {f.name}
-                    </option>
-                  ))}
-                </Select>
-                {sourceOptions.length === 0 ? (
-                  <p className="mt-1 text-xs text-coral">
-                    No eligible source fields yet for this skill.
-                  </p>
-                ) : null}
-              </Field>
-            ) : null}
+            <Field>
+              <Label>Input (source field, optional)</Label>
+              <Select
+                name="automationSourceFieldId"
+                defaultValue={field?.automation_source_field_id ?? ""}
+              >
+                <option value="">— none —</option>
+                {sourceOptions.map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {f.name}
+                  </option>
+                ))}
+              </Select>
+            </Field>
 
             <Field>
-              <Label>Prompt{needsPrompt ? "" : " (optional — uses a default if left blank)"}</Label>
+              <Label>Prompt</Label>
               <Textarea
                 name="automationPrompt"
                 rows={3}
                 placeholder='e.g. "Select a maximum of 10 relevant tags that represent the main topics in this description"'
                 defaultValue={field?.automation_prompt ?? ""}
-                required={needsPrompt}
               />
+              <p className="mt-1 text-xs text-charcoal/50">
+                The answer is generated in this field&rsquo;s data type
+                {showOptions ? " and must be one of its options" : ""}.
+              </p>
+              {dataType === "file" ? (
+                <p className="mt-1 text-xs text-coral">
+                  Generating files or images isn&rsquo;t supported yet — pick a text-based data
+                  type.
+                </p>
+              ) : null}
             </Field>
           </>
         ) : null}

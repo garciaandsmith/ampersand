@@ -1,11 +1,13 @@
-import { listProviders, listSkillAssignments } from "@/lib/data/providers";
-import { SKILL_LABELS } from "@/lib/types";
+import { getChatSettings, listProviders, listSkills } from "@/lib/data/providers";
 import {
   createProviderAction,
+  createSkillAction,
   deleteProviderAction,
-  setSkillAssignmentAction,
+  deleteSkillAction,
+  setChatSettingsAction,
+  updateSkillAction,
 } from "./actions";
-import { SkillProviderModelFields } from "./SkillProviderModelFields";
+import { ProviderModelFields } from "./ProviderModelFields";
 import { AvailableModelsExplorer } from "./AvailableModelsExplorer";
 import {
   Badge,
@@ -21,9 +23,10 @@ import {
 import { tableRowClass } from "@/lib/table";
 
 export default async function SettingsPage() {
-  const [providers, skills] = await Promise.all([
+  const [providers, skills, chatSettings] = await Promise.all([
     listProviders(),
-    listSkillAssignments(),
+    listSkills(),
+    getChatSettings(),
   ]);
 
   return (
@@ -108,52 +111,109 @@ export default async function SettingsPage() {
       <section>
         <h2 className="mb-4 font-sans text-base font-extrabold">Skills</h2>
         <p className="mb-4 max-w-2xl text-sm text-charcoal/60">
-          Each skill is the AI capability behind one place in the product. Assign it a
-          provider and a model — the model list is filtered to models that actually
-          support the skill.
+          A skill is just a named shortcut for a provider + model pair. Users pick a skill
+          by name in the Form Builder — the provider and model behind it live here.
         </p>
         <Table>
           <thead>
             <tr>
-              <Th>Skill</Th>
+              <Th>Name</Th>
               <Th>Provider</Th>
               <Th>Model</Th>
               <Th />
             </tr>
           </thead>
           <tbody>
-            {skills.map((skill, i) => {
-              const formId = `skill-form-${skill.skill_key}`;
-              return (
-                <tr key={skill.skill_key} className={tableRowClass(i)}>
-                  <td className="px-4 py-3 font-bold">
-                    {SKILL_LABELS[skill.skill_key] ?? skill.skill_key}
-                  </td>
-                  <SkillProviderModelFields formId={formId} providers={providers} skill={skill} />
-                  <td className="px-4 py-3 text-right">
-                    <Button
-                      form={formId}
-                      type="submit"
-                      variant="ghost"
-                      className="px-3 py-1 text-xs"
-                    >
-                      Save
-                    </Button>
-                  </td>
-                </tr>
-              );
-            })}
+            {skills.length === 0 ? (
+              <tr>
+                <td colSpan={4} className="px-4 py-6 text-center text-charcoal/50">
+                  No skills yet.
+                </td>
+              </tr>
+            ) : (
+              skills.map((skill, i) => {
+                const formId = `skill-form-${skill.id}`;
+                return (
+                  <tr key={skill.id} className={tableRowClass(i)}>
+                    <td className="px-4 py-3">
+                      <Input
+                        form={formId}
+                        name="name"
+                        defaultValue={skill.name}
+                        required
+                        className="min-w-[160px]"
+                      />
+                    </td>
+                    <ProviderModelFields
+                      formId={formId}
+                      providers={providers}
+                      initialProviderId={skill.provider_id}
+                      initialModel={skill.model}
+                      layout="table"
+                    />
+                    <td className="px-4 py-3 text-right">
+                      <div className="flex justify-end gap-2">
+                        <Button form={formId} type="submit" variant="ghost" className="px-3 py-1 text-xs">
+                          Save
+                        </Button>
+                        <form action={deleteSkillAction}>
+                          <input type="hidden" name="id" value={skill.id} />
+                          <Button variant="danger" type="submit" className="px-3 py-1 text-xs">
+                            Delete
+                          </Button>
+                        </form>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
           </tbody>
         </Table>
         {skills.map((skill) => (
-          <form
-            key={skill.skill_key}
-            id={`skill-form-${skill.skill_key}`}
-            action={setSkillAssignmentAction}
-          >
-            <input type="hidden" name="skillKey" value={skill.skill_key} />
+          <form key={skill.id} id={`skill-form-${skill.id}`} action={updateSkillAction}>
+            <input type="hidden" name="id" value={skill.id} />
           </form>
         ))}
+
+        <Card className="mt-4 max-w-xl">
+          <h3 className="mb-3 font-sans text-sm font-extrabold">Add a skill</h3>
+          <form action={createSkillAction} className="flex flex-col gap-2">
+            <Field>
+              <Label>Name</Label>
+              <Input name="name" placeholder="e.g. Caption writer" required />
+            </Field>
+            <ProviderModelFields
+              providers={providers}
+              initialProviderId={null}
+              initialModel={null}
+              layout="card"
+            />
+            <Button type="submit" className="self-start">
+              Create skill
+            </Button>
+          </form>
+        </Card>
+      </section>
+
+      <section>
+        <h2 className="mb-4 font-sans text-base font-extrabold">Create chat assistant</h2>
+        <p className="mb-4 max-w-2xl text-sm text-charcoal/60">
+          The provider and model that power the Create page&rsquo;s grounded Q&amp;A chat.
+        </p>
+        <Card className="max-w-xl">
+          <form action={setChatSettingsAction} className="flex flex-col gap-2">
+            <ProviderModelFields
+              providers={providers}
+              initialProviderId={chatSettings.provider_id}
+              initialModel={chatSettings.model}
+              layout="card"
+            />
+            <Button type="submit" className="self-start">
+              Save
+            </Button>
+          </form>
+        </Card>
       </section>
     </div>
   );

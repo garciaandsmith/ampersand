@@ -1,4 +1,4 @@
-import type { FieldDataType, FormField, InputType, SkillKey } from "@/lib/types";
+import type { FieldDataType, FormField, InputType } from "@/lib/types";
 
 export type DraftField = {
   id: string;
@@ -8,9 +8,7 @@ export type DraftField = {
   input_type: InputType;
   automation_source_field_id: string | null;
   automation_prompt: string | null;
-  skill_key: SkillKey | null;
-  automation_provider_override_id: string | null;
-  automation_model_override: string | null;
+  skill_id: string | null;
 };
 
 export type DraftFieldInput = {
@@ -21,9 +19,7 @@ export type DraftFieldInput = {
   inputType: InputType;
   automationSourceFieldId: string | null;
   automationPrompt: string | null;
-  skillKey: SkillKey | null;
-  automationProviderOverrideId: string | null;
-  automationModelOverride: string | null;
+  skillId: string | null;
 };
 
 const NEW_ID_PREFIX = "new:";
@@ -45,9 +41,7 @@ export function toDraftField(field: FormField): DraftField {
     input_type: field.input_type,
     automation_source_field_id: field.automation_source_field_id,
     automation_prompt: field.automation_prompt,
-    skill_key: field.skill_key,
-    automation_provider_override_id: field.automation_provider_override_id,
-    automation_model_override: field.automation_model_override,
+    skill_id: field.skill_id,
   };
 }
 
@@ -60,8 +54,6 @@ export function toDraftFieldInput(field: DraftField): DraftFieldInput {
     inputType: field.input_type,
     automationSourceFieldId: field.automation_source_field_id,
     automationPrompt: field.automation_prompt,
-    skillKey: field.skill_key,
-    automationProviderOverrideId: field.automation_provider_override_id,
-    automationModelOverride: field.automation_model_override,
+    skillId: field.skill_id,
   };
 }

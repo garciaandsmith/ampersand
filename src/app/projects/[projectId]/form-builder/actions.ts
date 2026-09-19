@@ -9,7 +9,6 @@ import {
   updateFieldAutomationSource,
   updateFieldOrder,
 } from "@/lib/data/fields";
-import { SKILL_NEEDS_PROMPT, SKILL_NEEDS_SOURCE_FIELD } from "@/lib/types";
 import { isNewDraftId, type DraftFieldInput } from "./draft";
 
 // Persists the whole form in one go: creates, updates, and deletes are
@@ -24,16 +23,8 @@ export async function saveFormAction(projectId: string, draftFields: DraftFieldI
     if (!f.name.trim() || !f.dataType) {
       throw new Error("Every field needs a name and a data type");
     }
-    if (f.inputType === "automated") {
-      if (!f.skillKey) {
-        throw new Error(`"${f.name}" needs a skill selected to govern its generation`);
-      }
-      if (SKILL_NEEDS_SOURCE_FIELD[f.skillKey] && !f.automationSourceFieldId) {
-        throw new Error(`"${f.name}" needs a source field for its skill`);
-      }
-      if (SKILL_NEEDS_PROMPT[f.skillKey] && !f.automationPrompt?.trim()) {
-        throw new Error(`"${f.name}" needs a prompt for its skill`);
-      }
+    if (f.inputType === "automated" && !f.skillId) {
+      throw new Error(`"${f.name}" needs a skill selected`);
     }
   }
 
@@ -65,9 +56,7 @@ export async function saveFormAction(projectId: string, draftFields: DraftFieldI
         inputType: f.inputType,
         automationSourceFieldId: sourceStillPending ? null : resolvedSource,
         automationPrompt: f.automationPrompt,
-        skillKey: f.inputType === "automated" ? f.skillKey : null,
-        automationProviderOverrideId: f.automationProviderOverrideId,
-        automationModelOverride: f.automationModelOverride,
+        skillId: f.inputType === "automated" ? f.skillId : null,
         sortOrder: i,
       });
       idMap.set(f.id, created.id);
@@ -82,9 +71,7 @@ export async function saveFormAction(projectId: string, draftFields: DraftFieldI
         inputType: f.inputType,
         automationSourceFieldId: sourceStillPending ? null : resolvedSource,
         automationPrompt: f.automationPrompt,
-        skillKey: f.inputType === "automated" ? f.skillKey : null,
-        automationProviderOverrideId: f.automationProviderOverrideId,
-        automationModelOverride: f.automationModelOverride,
+        skillId: f.inputType === "automated" ? f.skillId : null,
       });
       await updateFieldOrder(f.id, i);
       if (sourceStillPending) {
