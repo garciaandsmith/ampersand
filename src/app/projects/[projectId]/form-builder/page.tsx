@@ -1,4 +1,5 @@
 import { listFields } from "@/lib/data/fields";
+import { listSkills } from "@/lib/data/providers";
 import { FormBuilderList } from "./FormBuilderList";
 
 export default async function FormBuilderPage({
@@ -7,10 +8,10 @@ export default async function FormBuilderPage({
   params: Promise<{ projectId: string }>;
 }) {
   const { projectId } = await params;
-  const fields = await listFields(projectId);
+  const [fields, skills] = await Promise.all([listFields(projectId), listSkills()]);
 
   return (
-    <div className="max-w-3xl">
+    <div className="max-w-5xl">
       <h2 className="mb-1 font-sans text-base font-extrabold">Form Builder</h2>
       <p className="mb-6 max-w-2xl text-sm text-charcoal/60">
         Define the fields that make up an Archive record for this project. Manual
@@ -18,7 +19,7 @@ export default async function FormBuilderPage({
         another field&rsquo;s content plus a prompt you write.
       </p>
 
-      <FormBuilderList projectId={projectId} fields={fields} />
+      <FormBuilderList projectId={projectId} fields={fields} skills={skills} />
     </div>
   );
 }

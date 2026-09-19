@@ -1,96 +1,222 @@
 "use client";
 
-import { useState } from "react";
-import type { FormField, FieldDataType } from "@/lib/types";
+import { useMemo, useEffect, useState, type FormEvent } from "react";
+import { X } from "lucide-react";
+import type { AiSkill, FieldDataType } from "@/lib/types";
 import { FIELD_DATA_TYPE_LABELS } from "@/lib/types";
 import { Button, Field, Input, Label, Select, Textarea } from "@/components/ui";
-import { createFieldAction } from "./actions";
+import type { DraftField } from "./draft";
 
 const DATA_TYPES = Object.keys(FIELD_DATA_TYPE_LABELS) as FieldDataType[];
 
 export function FieldForm({
-  projectId,
   existingFields,
+  skills,
+  field,
+  onSubmit,
+  onCancel,
 }: {
-  projectId: string;
-  existingFields: FormField[];
+  existingFields: DraftField[];
+  skills: AiSkill[];
+  field?: DraftField;
+  onSubmit: (values: Omit<DraftField, "id">) => void;
+  onCancel: () => void;
 }) {
-  const [dataType, setDataType] = useState<FieldDataType>("text");
-  const [inputType, setInputType] = useState<"manual" | "automated">("manual");
+  const isEditing = Boolean(field);
+  const [dataType, setDataType] = useState<FieldDataType>(field?.data_type ?? "text");
+  const [inputType, setInputType] = useState<"manual" | "automated">(
+    field?.input_type ?? "manual",
+  );
+  const [skillId, setSkillId] = useState<string>(field?.skill_id ?? skills[0]?.id ?? "");
+  const [dirty, setDirty] = useState(false);
 
   const showOptions = dataType === "single_select" || dataType === "multi_select";
+  const sourceOptions = useMemo(
+    () => existingFields.filter((f) => f.id !== field?.id),
+    [existingFields, field?.id],
+  );
+
+  useEffect(() => {
+    if (!dirty) return;
+    function handleBeforeUnload(e: BeforeUnloadEvent) {
+      e.preventDefault();
+      e.returnValue = "";
+    }
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [dirty]);
+
+  function handleCancel() {
+    if (dirty && !window.confirm("Discard your changes to this field?")) {
+      return;
+    }
+    onCancel();
+  }
+
+  function handleSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const name = String(formData.get("name") ?? "").trim();
+    const optionsRaw = String(formData.get("options") ?? "").trim();
+    const options = optionsRaw
+      ? optionsRaw.split(",").map((o) => o.trim()).filter(Boolean)
+      : null;
+    const automationSourceFieldId =
+      String(formData.get("automationSourceFieldId") ?? "") || null;
+    const automationPrompt = String(formData.get("automationPrompt") ?? "").trim() || null;
+
+    onSubmit({
+      name,
+      data_type: dataType,
+      options,
+      input_type: inputType,
+      automation_source_field_id: inputType === "automated" ? automationSourceFieldId : null,
+      automation_prompt: inputType === "automated" ? automationPrompt : null,
+      skill_id: inputType === "automated" ? skillId || null : null,
+    });
+
+    if (!isEditing) {
+      e.currentTarget.reset();
+      setDataType("text");
+      setInputType("manual");
+      setSkillId(skills[0]?.id ?? "");
+    }
+    setDirty(false);
+  }
 
   return (
-    <form action={createFieldAction} className="flex flex-col gap-2">
-      <input type="hidden" name="projectId" value={projectId} />
-
-      <Field>
-        <Label>Name</Label>
-        <Input name="name" placeholder="e.g. Tags" required />
-      </Field>
-
-      <Field>
-        <Label>Data type</Label>
-        <Select
-          name="dataType"
-          value={dataType}
-          onChange={(e) => setDataType(e.target.value as FieldDataType)}
+    <div className="rounded border border-charcoal/15 bg-white p-6">
+      <div className="mb-3 flex items-center justify-between">
+        <h3 className="font-sans text-sm font-extrabold">
+          {isEditing ? "Edit field" : "New field"}
+        </h3>
+        <button
+          type="button"
+          onClick={handleCancel}
+          aria-label="Cancel"
+          className="text-charcoal/40 hover:text-charcoal"
         >
-          {DATA_TYPES.map((dt) => (
-            <option key={dt} value={dt}>
-              {FIELD_DATA_TYPE_LABELS[dt]}
-            </option>
-          ))}
-        </Select>
-      </Field>
+          <X className="h-4 w-4" />
+        </button>
+      </div>
 
-      {showOptions ? (
+      <form
+        onSubmit={handleSubmit}
+        onChange={() => setDirty(true)}
+        className="flex flex-col gap-2"
+      >
         <Field>
-          <Label>Options (comma separated)</Label>
-          <Input name="options" placeholder="Photo, Video, Document" />
+          <Label>Name</Label>
+          <Input name="name" placeholder="e.g. Tags" defaultValue={field?.name} required />
         </Field>
-      ) : null}
 
-      <Field>
-        <Label>Input type</Label>
-        <Select
-          name="inputType"
-          value={inputType}
-          onChange={(e) => setInputType(e.target.value as "manual" | "automated")}
-        >
-          <option value="manual">Manual</option>
-          <option value="automated">Automated</option>
-        </Select>
-      </Field>
+        <Field>
+          <Label>Data type</Label>
+          <Select
+            name="dataType"
+            value={dataType}
+            onChange={(e) => setDataType(e.target.value as FieldDataType)}
+          >
+            {DATA_TYPES.map((dt) => (
+              <option key={dt} value={dt}>
+                {FIELD_DATA_TYPE_LABELS[dt]}
+              </option>
+            ))}
+          </Select>
+        </Field>
 
-      {inputType === "automated" ? (
-        <>
+        {showOptions ? (
           <Field>
-            <Label>Input (source field)</Label>
-            <Select name="automationSourceFieldId" required>
-              <option value="">— select a field —</option>
-              {existingFields.map((f) => (
-                <option key={f.id} value={f.id}>
-                  {f.name}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Field>
-            <Label>Prompt</Label>
-            <Textarea
-              name="automationPrompt"
-              rows={3}
-              placeholder='e.g. "Select a maximum of 10 relevant tags that represent the main topics in this description"'
-              required
+            <Label>Options (comma separated)</Label>
+            <Input
+              name="options"
+              placeholder="Photo, Video, Document"
+              defaultValue={field?.options?.join(", ")}
             />
           </Field>
-        </>
-      ) : null}
+        ) : null}
 
-      <Button type="submit" className="self-start">
-        Add field
-      </Button>
-    </form>
+        <Field>
+          <Label>Input type</Label>
+          <Select
+            name="inputType"
+            value={inputType}
+            onChange={(e) => setInputType(e.target.value as "manual" | "automated")}
+          >
+            <option value="manual">Manual</option>
+            <option value="automated">Automated</option>
+          </Select>
+        </Field>
+
+        {inputType === "automated" ? (
+          <>
+            <Field>
+              <Label>Skill</Label>
+              <Select
+                name="skillId"
+                value={skillId}
+                onChange={(e) => setSkillId(e.target.value)}
+                required
+              >
+                {skills.length === 0 ? <option value="">— no skills configured —</option> : null}
+                {skills.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </Select>
+              <p className="mt-1 text-xs text-charcoal/50">
+                Picks the provider and model this field&rsquo;s generation uses, set by an
+                admin in Settings.
+              </p>
+            </Field>
+
+            <Field>
+              <Label>Input (source field, optional)</Label>
+              <Select
+                name="automationSourceFieldId"
+                defaultValue={field?.automation_source_field_id ?? ""}
+              >
+                <option value="">— none —</option>
+                {sourceOptions.map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {f.name}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+
+            <Field>
+              <Label>Prompt</Label>
+              <Textarea
+                name="automationPrompt"
+                rows={3}
+                placeholder='e.g. "Select a maximum of 10 relevant tags that represent the main topics in this description"'
+                defaultValue={field?.automation_prompt ?? ""}
+              />
+              <p className="mt-1 text-xs text-charcoal/50">
+                The answer is generated in this field&rsquo;s data type
+                {showOptions ? " and must be one of its options" : ""}.
+              </p>
+              {dataType === "file" ? (
+                <p className="mt-1 text-xs text-coral">
+                  Generating files or images isn&rsquo;t supported yet — pick a text-based data
+                  type.
+                </p>
+              ) : null}
+            </Field>
+          </>
+        ) : null}
+
+        <div className="flex items-center gap-2">
+          <Button type="submit" className="self-start">
+            {isEditing ? "Update field" : "Add field"}
+          </Button>
+          <Button type="button" variant="ghost" onClick={handleCancel} className="self-start">
+            Cancel
+          </Button>
+        </div>
+      </form>
+    </div>
   );
 }

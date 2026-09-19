@@ -17,24 +17,25 @@ export type AiProvider = {
 
 export type AiProviderPublic = Omit<AiProvider, "api_key">;
 
-export type TaskKey =
-  | "field_automation"
-  | "visual_recognition"
-  | "summary_generation"
-  | "chat";
-
-export const TASK_LABELS: Record<TaskKey, string> = {
-  field_automation: "Automated form fields",
-  visual_recognition: "Visual recognition",
-  summary_generation: "Summary generation",
-  chat: "Create / chat generation",
-};
-
-export type AiTaskAssignment = {
-  task_key: TaskKey;
+/**
+ * A skill is just a named shortcut for a provider+model pair, managed by an
+ * admin in Settings. Picking one in the Form Builder does nothing beyond
+ * selecting which provider/model an automated field uses — it carries no
+ * other requirements (source field, prompt) for the field it's attached to.
+ */
+export type AiSkill = {
+  id: string;
+  name: string;
   provider_id: string | null;
   model: string | null;
+  created_at: string;
   updated_at: string;
+};
+
+/** The Create chat assistant's provider+model, configured separately from the skills list. */
+export type ChatSettings = {
+  provider_id: string | null;
+  model: string | null;
 };
 
 export type FieldDataType =
@@ -71,6 +72,8 @@ export type FormField = {
   input_type: InputType;
   automation_source_field_id: string | null;
   automation_prompt: string | null;
+  /** Which skill's provider+model this field's generation uses. Null on legacy rows or manual fields. */
+  skill_id: string | null;
   sort_order: number;
   is_core: boolean;
   created_at: string;
@@ -79,6 +82,7 @@ export type FormField = {
 export type ArchiveItem = {
   id: string;
   project_id: string;
+  title: string | null;
   file_path: string | null;
   file_name: string | null;
   file_type: string | null;

@@ -6,6 +6,14 @@ import type { FormField } from "@/lib/types";
 import { Badge, Button, Card, Field, IconButton, Input, Label, Textarea } from "@/components/ui";
 import { createArchiveItemAction, generateAutomatedFieldsAction } from "./actions";
 
+async function fileToBase64(file: File): Promise<string> {
+  const buffer = await file.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary);
+}
+
 function ManualInput({
   field,
   value,
@@ -60,6 +68,7 @@ export function NewArchiveItemForm({
   manualFields: FormField[];
   automatedFields: FormField[];
 }) {
+  const [title, setTitle] = useState("");
   const [fileByField, setFileByField] = useState<Record<string, File | null>>({});
   const [manualValues, setManualValues] = useState<Record<string, string>>({});
   const [automatedValues, setAutomatedValues] = useState<Record<string, string>>({});
@@ -78,9 +87,14 @@ export function NewArchiveItemForm({
     setGeneratingFieldId(fieldId ?? null);
     startGenerating(async () => {
       try {
+        const manualFiles: Record<string, { name: string; type: string; dataBase64: string }> = {};
+        for (const [fieldId, file] of Object.entries(fileByField)) {
+          if (file) manualFiles[fieldId] = { name: file.name, type: file.type, dataBase64: await fileToBase64(file) };
+        }
         const results = await generateAutomatedFieldsAction({
           projectId,
           manualValues,
+          manualFiles,
           fieldId,
         });
         setAutomatedValues((prev) => ({ ...prev, ...results }));
@@ -98,6 +112,7 @@ export function NewArchiveItemForm({
       try {
         const formData = new FormData();
         formData.set("projectId", projectId);
+        formData.set("title", title);
         for (const [fieldId, file] of Object.entries(fileByField)) {
           if (file) formData.set(`file:${fieldId}`, file);
         }
@@ -112,12 +127,23 @@ export function NewArchiveItemForm({
     });
   }
 
-  const hasManualInput = Object.values(manualValues).some((v) => v.trim());
+  const hasManualInput =
+    Object.values(manualValues).some((v) => v.trim()) ||
+    Object.values(fileByField).some((f) => f !== null);
 
   return (
     <div className="flex max-w-2xl flex-col gap-6">
       <Card>
         <h3 className="mb-4 font-sans text-sm font-extrabold">Source</h3>
+
+        <Field>
+          <Label>Title</Label>
+          <Input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Defaults to the uploaded file's name if left blank"
+          />
+        </Field>
 
         {manualFields.map((f) => (
           <Field key={f.id}>

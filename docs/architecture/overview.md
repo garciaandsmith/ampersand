@@ -82,16 +82,42 @@ Supabase doesn't provide automatically outside `public`. Future schema
 changes should be added as new numbered files here even without an automated
 runner, so the SQL history stays legible.
 
+## Skills
+
+A "skill" (`ampersand.ai_skills`, `src/lib/data/providers.ts`) is nothing
+more than an admin-managed, freeform name attached to a provider+model pair.
+Admins create/rename/delete skills and assign each one a provider+model in
+Admin → Settings; the Form Builder's skill picker just selects one by name
+for an automated field (`form_fields.skill_id`). Picking a skill carries no
+other implication — it doesn't require a source field, a prompt, or any
+particular source field type. That used to be true (a fixed six-skill enum
+where e.g. `image_recognition` required a file-type source field); it was
+deliberately simplified away to avoid clutter.
+
+## Automated fields
+
+An automated field is self-describing: a **source** (optional field whose
+content is read — text, an image or a PDF, decided by the source field's
+data type and the file's MIME type), a **prompt** (the instruction), a
+**data type** (+ options for lists) that defines the output format, and a
+**skill** that picks the provider/model. `generateAutomatedFieldsAction`
+(`src/app/projects/[projectId]/archive/new/actions.ts`) resolves the skill
+and calls one generic function, `runFieldGeneration`
+(`src/lib/ai/tasks.ts`), which appends format instructions for the data
+type. Text-based output only for now; file/image output is not implemented.
+PDF sources only work with Anthropic-backed skills.
+
 ## AI task flow
 
-1. Admin connects one or more providers (name + type + API key) and assigns
-   each task a provider + model in Admin → Settings.
-2. `resolveTaskProvider(taskKey)` (`src/lib/data/providers.ts`) looks up the
-   assignment and joins in the provider's API key — server-only.
-3. `src/lib/ai/tasks.ts` has one function per product-level operation
-   (`runFieldAutomation`, `runVisualRecognition`, `runChatAnswer`), each
-   building a task-specific prompt and calling `generateText()`.
-4. AI output is always returned to the client for review/editing before
+The Create chat assistant is decoupled from the skills concept (it isn't a
+form-builder feature) and has its own single setting instead:
+
+1. `resolveChatProvider()` (`src/lib/data/providers.ts`) looks up the
+   admin-configured provider/model from `ampersand.chat_settings` and joins
+   in the provider's API key — server-only.
+2. `runChatAnswer()` (`src/lib/ai/tasks.ts`) builds a grounded prompt from
+   retrieved archive snippets and calls `generateText()`.
+3. AI output is always returned to the client for review/editing before
    being persisted — nothing is written to the database directly from an AI
    response (per AGENTS.md: "AI output is not automatically truth").
 

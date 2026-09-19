@@ -1,69 +1,106 @@
 import "server-only";
-import { resolveTaskProvider } from "@/lib/data/providers";
+import { resolveChatProvider } from "@/lib/data/providers";
 import { generateText } from "@/lib/ai/client";
+import type { AiProvider, FieldDataType } from "@/lib/types";
 
-export class TaskNotConfiguredError extends Error {
-  constructor(taskKey: string) {
-    super(
-      `No AI provider is assigned to the "${taskKey}" task yet. Configure it in Admin → Settings.`,
-    );
-    this.name = "TaskNotConfiguredError";
+export type GenerationSource =
+  | { kind: "text"; text: string }
+  | { kind: "file"; mediaType: string; dataBase64: string };
+
+/** What the model must return so the value fits the field's data type. */
+function outputInstruction(dataType: FieldDataType, options: string[] | null): string {
+  const list = (options ?? []).join(", ");
+  switch (dataType) {
+    case "text":
+      return "Plain text on a single line.";
+    case "long_text":
+      return "Plain text. Multiple sentences or paragraphs are fine.";
+    case "number":
+      return "A single number only, with no units or text.";
+    case "date":
+      return "A single date in YYYY-MM-DD format only.";
+    case "single_select":
+      return `Exactly one of these options, copied verbatim: ${list}.`;
+    case "multi_select":
+      return `One or more of these options, copied verbatim, separated by commas: ${list}.`;
+    case "tags":
+      return "A comma-separated list of short tags.";
+    case "url":
+      return "A single URL only.";
+    case "file":
+      throw new Error("Generating a file or image as output isn't supported yet.");
   }
 }
 
-/** Runs the "field_automation" task: fills one automated form field from an input value + prompt. */
-export async function runFieldAutomation(input: {
+/**
+ * Generic automated-field generation: read the source (if any), follow the
+ * prompt, and answer in the format of the field's data type, using whichever
+ * provider/model the field's skill points at.
+ */
+export async function runFieldGeneration(input: {
   fieldName: string;
-  automationPrompt: string;
-  sourceValue: string;
-}): Promise<string> {
-  const resolved = await resolveTaskProvider("field_automation");
-  if (!resolved) throw new TaskNotConfiguredError("field_automation");
-
-  const prompt = [
-    `You are filling in the "${input.fieldName}" field of a content archive record.`,
-    `Instruction: ${input.automationPrompt}`,
-    "",
-    "Source content:",
-    input.sourceValue,
-    "",
-    "Respond with only the value for the field — no preamble, no explanation.",
-  ].join("\n");
-
-  return generateText({
-    provider: resolved.provider,
-    model: resolved.model,
-    system: "You produce concise, structured metadata for a content archive.",
-    prompt,
-  });
-}
-
-/** Runs the "visual_recognition" task: describes an uploaded image. */
-export async function runVisualRecognition(input: {
-  imageBase64: string;
-  mediaType: string;
   prompt: string;
+  dataType: FieldDataType;
+  options: string[] | null;
+  source?: GenerationSource;
+  resolved: { provider: AiProvider; model: string };
 }): Promise<string> {
-  const resolved = await resolveTaskProvider("visual_recognition");
-  if (!resolved) throw new TaskNotConfiguredError("visual_recognition");
+  const format = outputInstruction(input.dataType, input.options);
+
+  const lines = [
+    `You are filling in the "${input.fieldName}" field of a content archive record.`,
+    `Instruction: ${input.prompt}`,
+  ];
+  if (input.source?.kind === "text") {
+    lines.push("", "Source content:", input.source.text);
+  } else if (input.source?.kind === "file") {
+    lines.push("", "The source content is attached.");
+  }
+  lines.push(
+    "",
+    `Required output format: ${format}`,
+    "Respond with only the value for the field — no preamble, no explanation.",
+  );
+
+  let imageBase64: { mediaType: string; data: string } | undefined;
+  let documentBase64: { mediaType: "application/pdf"; data: string } | undefined;
+  if (input.source?.kind === "file") {
+    if (input.source.mediaType.startsWith("image/")) {
+      imageBase64 = { mediaType: input.source.mediaType, data: input.source.dataBase64 };
+    } else if (input.source.mediaType === "application/pdf") {
+      documentBase64 = { mediaType: "application/pdf", data: input.source.dataBase64 };
+    } else {
+      throw new Error(
+        `Source files of type "${input.source.mediaType}" aren't supported — only images and PDFs.`,
+      );
+    }
+  }
 
   return generateText({
-    provider: resolved.provider,
-    model: resolved.model,
-    system: "You describe images clearly and factually for a content archive.",
-    prompt: input.prompt,
-    imageBase64: { mediaType: input.mediaType, data: input.imageBase64 },
+    provider: input.resolved.provider,
+    model: input.resolved.model,
+    system: "You produce values for the fields of a content archive.",
+    prompt: lines.join("\n"),
+    imageBase64,
+    documentBase64,
   });
 }
 
-/** Runs the "chat" task: answers a question grounded in retrieved archive snippets. */
+export class ChatNotConfiguredError extends Error {
+  constructor() {
+    super("No AI provider is assigned to the Create chat assistant yet. Configure it in Admin → Settings.");
+    this.name = "ChatNotConfiguredError";
+  }
+}
+
+/** Answers a question grounded in retrieved archive snippets. */
 export async function runChatAnswer(input: {
   question: string;
   history: { role: "user" | "assistant"; content: string }[];
   contextSnippets: string[];
 }): Promise<string> {
-  const resolved = await resolveTaskProvider("chat");
-  if (!resolved) throw new TaskNotConfiguredError("chat");
+  const resolved = await resolveChatProvider();
+  if (!resolved) throw new ChatNotConfiguredError();
 
   const context =
     input.contextSnippets.length > 0

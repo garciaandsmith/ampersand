@@ -44,6 +44,7 @@ export async function getValuesForItems(
 
 export async function createArchiveItem(input: {
   projectId: string;
+  title?: string | null;
   filePath?: string | null;
   fileName?: string | null;
   fileType?: string | null;
@@ -52,6 +53,7 @@ export async function createArchiveItem(input: {
     .from("archive_items")
     .insert({
       project_id: input.projectId,
+      title: input.title ?? null,
       file_path: input.filePath ?? null,
       file_name: input.fileName ?? null,
       file_type: input.fileType ?? null,
@@ -61,6 +63,15 @@ export async function createArchiveItem(input: {
 
   if (error) throw new Error(error.message);
   return data;
+}
+
+export async function updateArchiveItemTitle(id: string, title: string | null): Promise<void> {
+  const { error } = await supabaseAdmin()
+    .from("archive_items")
+    .update({ title, updated_at: new Date().toISOString() })
+    .eq("id", id);
+
+  if (error) throw new Error(error.message);
 }
 
 export async function deleteArchiveItem(id: string): Promise<void> {
@@ -115,4 +126,12 @@ export async function getArchiveFileSignedUrl(path: string): Promise<string | nu
 
   if (error) return null;
   return data.signedUrl;
+}
+
+/** Downloads an already-uploaded archive file's bytes, base64-encoded, for AI skills (image_recognition, document_parsing). */
+export async function getArchiveFileBase64(path: string): Promise<string | null> {
+  const { data, error } = await supabaseAdmin().storage.from("archive").download(path);
+  if (error || !data) return null;
+  const arrayBuffer = await data.arrayBuffer();
+  return Buffer.from(arrayBuffer).toString("base64");
 }

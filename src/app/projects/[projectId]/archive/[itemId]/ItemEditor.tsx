@@ -50,19 +50,22 @@ export function ItemEditor({
   manualFields,
   automatedFields,
   initialValues,
+  initialTitle,
 }: {
   projectId: string;
   itemId: string;
   manualFields: FormField[];
   automatedFields: FormField[];
   initialValues: Record<string, string>;
+  initialTitle: string;
 }) {
+  const [title, setTitle] = useState(initialTitle);
   const [values, setValues] = useState<Record<string, string>>(initialValues);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [isGenerating, startGenerating] = useTransition();
   const [generatingFieldId, setGeneratingFieldId] = useState<string | null>(null);
-  const [isSaving, startSaving] = useTransition();
+  const [isSaving, setIsSaving] = useState(false);
 
   const editableManualFields = useMemo(
     () => manualFields.filter((f) => f.data_type !== "file"),
@@ -82,6 +85,7 @@ export function ItemEditor({
         const results = await generateAutomatedFieldsAction({
           projectId,
           manualValues: values,
+          itemId,
           fieldId,
         });
         setValues((prev) => ({ ...prev, ...results }));
@@ -93,26 +97,38 @@ export function ItemEditor({
     });
   }
 
-  function handleSave() {
+  async function handleSave() {
     setError(null);
-    startSaving(async () => {
-      try {
-        const formData = new FormData();
-        formData.set("projectId", projectId);
-        formData.set("itemId", itemId);
-        formData.set("values", JSON.stringify(values));
-        await updateArchiveItemAction(formData);
-        setSaved(true);
-      } catch (e) {
-        setError((e as Error).message);
-      }
-    });
+    setIsSaving(true);
+    try {
+      const formData = new FormData();
+      formData.set("projectId", projectId);
+      formData.set("itemId", itemId);
+      formData.set("title", title);
+      formData.set("values", JSON.stringify(values));
+      await updateArchiveItemAction(formData);
+      setSaved(true);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   return (
     <div className="flex max-w-2xl flex-col gap-6">
       <Card>
         <h3 className="mb-4 font-sans text-sm font-extrabold">Fields</h3>
+        <Field>
+          <Label>Title</Label>
+          <Input
+            value={title}
+            onChange={(e) => {
+              setSaved(false);
+              setTitle(e.target.value);
+            }}
+          />
+        </Field>
         {editableManualFields.map((f) => (
           <Field key={f.id}>
             <Label>{f.name}</Label>

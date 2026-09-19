@@ -21,6 +21,7 @@ export async function createField(input: {
   inputType: InputType;
   automationSourceFieldId?: string | null;
   automationPrompt?: string | null;
+  skillId?: string | null;
   sortOrder: number;
   isCore?: boolean;
 }): Promise<FormField> {
@@ -34,6 +35,7 @@ export async function createField(input: {
       input_type: input.inputType,
       automation_source_field_id: input.automationSourceFieldId ?? null,
       automation_prompt: input.automationPrompt ?? null,
+      skill_id: input.skillId ?? null,
       sort_order: input.sortOrder,
       is_core: input.isCore ?? false,
     })
@@ -44,7 +46,59 @@ export async function createField(input: {
   return data;
 }
 
+export async function updateField(
+  id: string,
+  input: {
+    name: string;
+    dataType: FieldDataType;
+    options?: string[] | null;
+    inputType: InputType;
+    automationSourceFieldId?: string | null;
+    automationPrompt?: string | null;
+    skillId?: string | null;
+  },
+): Promise<FormField> {
+  const { data, error } = await supabaseAdmin()
+    .from("form_fields")
+    .update({
+      name: input.name,
+      data_type: input.dataType,
+      options: input.options ?? null,
+      input_type: input.inputType,
+      automation_source_field_id: input.automationSourceFieldId ?? null,
+      automation_prompt: input.automationPrompt ?? null,
+      skill_id: input.skillId ?? null,
+    })
+    .eq("id", id)
+    .select("*")
+    .single();
+
+  if (error) throw new Error(error.message);
+  return data;
+}
+
 export async function deleteField(id: string): Promise<void> {
   const { error } = await supabaseAdmin().from("form_fields").delete().eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+export async function updateFieldAutomationSource(
+  id: string,
+  automationSourceFieldId: string,
+): Promise<void> {
+  const { error } = await supabaseAdmin()
+    .from("form_fields")
+    .update({ automation_source_field_id: automationSourceFieldId })
+    .eq("id", id);
+
+  if (error) throw new Error(error.message);
+}
+
+export async function updateFieldOrder(id: string, sortOrder: number): Promise<void> {
+  const { error } = await supabaseAdmin()
+    .from("form_fields")
+    .update({ sort_order: sortOrder })
+    .eq("id", id);
+
   if (error) throw new Error(error.message);
 }
