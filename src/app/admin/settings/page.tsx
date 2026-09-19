@@ -9,6 +9,8 @@ import {
   setChatSettingsAction,
   updateSkillAction,
 } from "./actions";
+import { ActionForm } from "./ActionForm";
+import { ConfirmDeleteButton } from "./ConfirmDeleteButton";
 import { ProviderModelFields } from "./ProviderModelFields";
 import { AvailableModelsExplorer } from "./AvailableModelsExplorer";
 import {
@@ -155,6 +157,9 @@ export default async function SettingsPage() {
                       />
                     </td>
                     <ProviderModelFields
+                      // Remount after each save: React resets a form after its action runs and would
+                      // otherwise put these dropdowns back to their first-loaded values.
+                      key={`${skill.id}:${skill.updated_at}`}
                       formId={formId}
                       providers={providers}
                       initialProviderId={skill.provider_id}
@@ -167,12 +172,12 @@ export default async function SettingsPage() {
                         <Button form={formId} type="submit" variant="ghost" className="px-3 py-1 text-xs">
                           Save
                         </Button>
-                        <form action={deleteSkillAction}>
-                          <input type="hidden" name="id" value={skill.id} />
-                          <Button variant="danger" type="submit" className="px-3 py-1 text-xs">
-                            Delete
-                          </Button>
-                        </form>
+                        <ConfirmDeleteButton
+                          action={deleteSkillAction}
+                          id={skill.id}
+                          confirmMessage={`Delete the skill "${skill.name}"? Fields that use it will need another skill.`}
+                          className="px-3 py-1 text-xs"
+                        />
                       </div>
                     </td>
                   </tr>
@@ -205,19 +210,21 @@ export default async function SettingsPage() {
           </tbody>
         </Table>
         {skills.map((skill) => (
-          <form key={skill.id} id={`skill-form-${skill.id}`} action={updateSkillAction}>
+          <ActionForm key={skill.id} id={`skill-form-${skill.id}`} action={updateSkillAction}>
             <input type="hidden" name="id" value={skill.id} />
-          </form>
+          </ActionForm>
         ))}
 
         <Card className="mt-4 max-w-xl">
           <h3 className="mb-3 font-sans text-sm font-extrabold">Add a skill</h3>
-          <form action={createSkillAction} className="flex flex-col gap-2">
+          <ActionForm action={createSkillAction} resetOnSuccess className="flex flex-col gap-2">
             <Field>
               <Label>Name</Label>
               <Input name="name" placeholder="e.g. Caption writer" required />
             </Field>
             <ProviderModelFields
+              // New key after each created skill so the form starts blank again.
+              key={skills.length}
               providers={providers}
               initialProviderId={null}
               initialModel={null}
@@ -238,7 +245,7 @@ export default async function SettingsPage() {
             <Button type="submit" className="self-start">
               Create skill
             </Button>
-          </form>
+          </ActionForm>
         </Card>
       </section>
 
@@ -248,8 +255,9 @@ export default async function SettingsPage() {
           The provider and model that power the Create page&rsquo;s grounded Q&amp;A chat.
         </p>
         <Card className="max-w-xl">
-          <form action={setChatSettingsAction} className="flex flex-col gap-2">
+          <ActionForm action={setChatSettingsAction} className="flex flex-col gap-2">
             <ProviderModelFields
+              key={`${chatSettings.provider_id}:${chatSettings.model}`}
               providers={providers}
               initialProviderId={chatSettings.provider_id}
               initialModel={chatSettings.model}
@@ -258,7 +266,7 @@ export default async function SettingsPage() {
             <Button type="submit" className="self-start">
               Save
             </Button>
-          </form>
+          </ActionForm>
         </Card>
       </section>
     </div>
