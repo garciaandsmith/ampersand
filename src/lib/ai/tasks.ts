@@ -1,7 +1,7 @@
 import "server-only";
-import { resolveChatProvider } from "@/lib/data/providers";
+import { resolveChatProvider, type ResolvedModel } from "@/lib/data/providers";
 import { generateText } from "@/lib/ai/client";
-import type { AiProvider, FieldDataType } from "@/lib/types";
+import type { FieldDataType } from "@/lib/types";
 
 export type GenerationSource =
   | { kind: "text"; text: string }
@@ -43,7 +43,7 @@ export async function runFieldGeneration(input: {
   dataType: FieldDataType;
   options: string[] | null;
   source?: GenerationSource;
-  resolved: { provider: AiProvider; model: string };
+  resolved: ResolvedModel;
 }): Promise<string> {
   const format = outputInstruction(input.dataType, input.options);
 
@@ -83,6 +83,7 @@ export async function runFieldGeneration(input: {
     prompt: lines.join("\n"),
     imageBase64,
     documentBase64,
+    params: input.resolved.params,
   });
 }
 

@@ -111,8 +111,10 @@ export default async function SettingsPage() {
       <section>
         <h2 className="mb-4 font-sans text-base font-extrabold">Skills</h2>
         <p className="mb-4 max-w-2xl text-sm text-charcoal/60">
-          A skill is just a named shortcut for a provider + model pair. Users pick a skill
-          by name in the Form Builder — the provider and model behind it live here.
+          A skill is a named recipe: a provider and model, plus an optional effort level and
+          output-token limit. Users pick a skill by name in the Form Builder — the recipe
+          behind it lives here. Leave effort or tokens on the default to use the model&rsquo;s
+          own behavior.
         </p>
         <Table>
           <thead>
@@ -120,13 +122,15 @@ export default async function SettingsPage() {
               <Th>Name</Th>
               <Th>Provider</Th>
               <Th>Model</Th>
+              <Th>Effort</Th>
+              <Th>Max output tokens</Th>
               <Th />
             </tr>
           </thead>
           <tbody>
             {skills.length === 0 ? (
               <tr>
-                <td colSpan={4} className="px-4 py-6 text-center text-charcoal/50">
+                <td colSpan={6} className="px-4 py-6 text-center text-charcoal/50">
                   No skills yet.
                 </td>
               </tr>
@@ -150,6 +154,7 @@ export default async function SettingsPage() {
                       initialProviderId={skill.provider_id}
                       initialModel={skill.model}
                       layout="table"
+                      tuning={{ effort: skill.effort, maxOutputTokens: skill.max_output_tokens }}
                     />
                     <td className="px-4 py-3 text-right">
                       <div className="flex justify-end gap-2">
@@ -188,6 +193,7 @@ export default async function SettingsPage() {
               initialProviderId={null}
               initialModel={null}
               layout="card"
+              tuning={{ effort: null, maxOutputTokens: null }}
             />
             <Button type="submit" className="self-start">
               Create skill

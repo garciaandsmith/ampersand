@@ -11,6 +11,28 @@ import {
   updateSkill,
 } from "@/lib/data/providers";
 import { listAvailableModels, type AvailableModel } from "@/lib/ai/client";
+import { NO_PARAMS, normalizeParams, type GenerationParams } from "@/lib/ai/models";
+
+/**
+ * Reads the skill form's tuning inputs and cleans them against the chosen
+ * model, so the database only ever holds settings that model supports. The
+ * form already hides unsupported inputs; this guards against stale or forged input.
+ */
+async function readSkillParams(
+  formData: FormData,
+  providerId: string | null,
+  model: string | null,
+): Promise<GenerationParams> {
+  if (!providerId || !model) return NO_PARAMS;
+  const provider = await getProvider(providerId);
+  if (!provider) return NO_PARAMS;
+
+  const tokensRaw = String(formData.get("maxOutputTokens") ?? "").trim();
+  return normalizeParams(provider.type, model, {
+    effort: String(formData.get("effort") ?? "") || null,
+    maxOutputTokens: tokensRaw ? Number(tokensRaw) : null,
+  });
+}
 
 export async function createProviderAction(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
@@ -39,7 +61,8 @@ export async function createSkillAction(formData: FormData) {
 
   if (!name) throw new Error("Name is required");
 
-  await createSkill({ name, providerId, model });
+  const params = await readSkillParams(formData, providerId, model);
+  await createSkill({ name, providerId, model, params });
   revalidatePath("/admin/settings");
 }
 
@@ -52,7 +75,8 @@ export async function updateSkillAction(formData: FormData) {
   if (!id) throw new Error("Missing skill id");
   if (!name) throw new Error("Name is required");
 
-  await updateSkill(id, { name, providerId, model });
+  const params = await readSkillParams(formData, providerId, model);
+  await updateSkill(id, { name, providerId, model, params });
   revalidatePath("/admin/settings");
 }
 
