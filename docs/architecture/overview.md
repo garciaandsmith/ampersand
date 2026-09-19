@@ -87,8 +87,11 @@ runner, so the SQL history stays legible.
 A "skill" (`ampersand.ai_skills`, `src/lib/data/providers.ts`) is an
 admin-managed, freeform name attached to a "recipe": a provider + model, plus
 an optional effort level and output-token limit (`effort`,
-`max_output_tokens`; null = the model's default). Admins create/rename/delete
-skills and set the recipe in Admin → Settings; the Form Builder's skill
+`max_output_tokens`; null = the model's default), and optional standing
+`instructions` (markdown, e.g. an SEO/GEO writing guide). Instructions are
+appended to the system prompt in `runFieldGeneration`; the field's own prompt
+still says *what* to write, the skill's instructions say *how*. Admins
+create/rename/delete skills and set the recipe in Admin → Settings; the Form Builder's skill
 picker just selects one by name for an automated field
 (`form_fields.skill_id`). Picking a skill carries no other implication — it
 doesn't require a source field, a prompt, or any particular source field

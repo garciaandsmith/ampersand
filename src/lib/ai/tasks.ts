@@ -76,10 +76,18 @@ export async function runFieldGeneration(input: {
     }
   }
 
+  const system = ["You produce values for the fields of a content archive."];
+  if (input.resolved.instructions) {
+    system.push(
+      "Follow these instructions from the skill you are running when you write the value:",
+      input.resolved.instructions,
+    );
+  }
+
   return generateText({
     provider: input.resolved.provider,
     model: input.resolved.model,
-    system: "You produce values for the fields of a content archive.",
+    system: system.join("\n\n"),
     prompt: lines.join("\n"),
     imageBase64,
     documentBase64,

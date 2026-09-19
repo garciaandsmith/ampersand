@@ -60,6 +60,7 @@ type SkillInput = {
   providerId: string | null;
   model: string | null;
   params: GenerationParams;
+  instructions: string | null;
 };
 
 export async function createSkill(input: SkillInput): Promise<AiSkill> {
@@ -71,6 +72,7 @@ export async function createSkill(input: SkillInput): Promise<AiSkill> {
       model: input.model,
       effort: input.params.effort,
       max_output_tokens: input.params.maxOutputTokens,
+      instructions: input.instructions,
     })
     .select("*")
     .single();
@@ -88,6 +90,7 @@ export async function updateSkill(id: string, input: SkillInput): Promise<AiSkil
       model: input.model,
       effort: input.params.effort,
       max_output_tokens: input.params.maxOutputTokens,
+      instructions: input.instructions,
       updated_at: new Date().toISOString(),
     })
     .eq("id", id)
@@ -131,7 +134,13 @@ export async function setChatSettings(input: {
   return data;
 }
 
-export type ResolvedModel = { provider: AiProvider; model: string; params: GenerationParams };
+export type ResolvedModel = {
+  provider: AiProvider;
+  model: string;
+  params: GenerationParams;
+  /** Standing instructions from the skill, added to the system prompt. Null for chat and blank skills. */
+  instructions: string | null;
+};
 
 function toResolved(
   row: {
@@ -139,6 +148,7 @@ function toResolved(
     model: string | null;
     effort?: AiSkill["effort"];
     max_output_tokens?: number | null;
+    instructions?: string | null;
   } | null,
 ): ResolvedModel | null {
   if (!row || !row.provider_id || !row.model) return null;
@@ -149,7 +159,7 @@ function toResolved(
     row.effort !== undefined || row.max_output_tokens !== undefined
       ? { effort: row.effort ?? null, maxOutputTokens: row.max_output_tokens ?? null }
       : NO_PARAMS;
-  return { provider, model: row.model, params };
+  return { provider, model: row.model, params, instructions: row.instructions?.trim() || null };
 }
 
 /** Resolves the Create chat assistant's configured provider (with API key) + model. Server-only. */

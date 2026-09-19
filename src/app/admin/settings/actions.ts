@@ -12,6 +12,18 @@ import {
 } from "@/lib/data/providers";
 import { listAvailableModels, type AvailableModel } from "@/lib/ai/client";
 import { NO_PARAMS, normalizeParams, type GenerationParams } from "@/lib/ai/models";
+import { SKILL_INSTRUCTIONS_MAX_LENGTH } from "@/lib/types";
+
+/** Reads the skill's instructions textarea; blank becomes null ("no instructions"). */
+function readSkillInstructions(formData: FormData): string | null {
+  const instructions = String(formData.get("instructions") ?? "").trim();
+  if (instructions.length > SKILL_INSTRUCTIONS_MAX_LENGTH) {
+    throw new Error(
+      `Instructions are too long (${instructions.length.toLocaleString("en-US")} characters; the limit is ${SKILL_INSTRUCTIONS_MAX_LENGTH.toLocaleString("en-US")}).`,
+    );
+  }
+  return instructions || null;
+}
 
 /**
  * Reads the skill form's tuning inputs and cleans them against the chosen
@@ -62,7 +74,7 @@ export async function createSkillAction(formData: FormData) {
   if (!name) throw new Error("Name is required");
 
   const params = await readSkillParams(formData, providerId, model);
-  await createSkill({ name, providerId, model, params });
+  await createSkill({ name, providerId, model, params, instructions: readSkillInstructions(formData) });
   revalidatePath("/admin/settings");
 }
 
@@ -76,7 +88,7 @@ export async function updateSkillAction(formData: FormData) {
   if (!name) throw new Error("Name is required");
 
   const params = await readSkillParams(formData, providerId, model);
-  await updateSkill(id, { name, providerId, model, params });
+  await updateSkill(id, { name, providerId, model, params, instructions: readSkillInstructions(formData) });
   revalidatePath("/admin/settings");
 }
 

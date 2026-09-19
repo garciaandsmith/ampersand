@@ -1,4 +1,6 @@
+import { Fragment } from "react";
 import { getChatSettings, listProviders, listSkills } from "@/lib/data/providers";
+import { SKILL_INSTRUCTIONS_MAX_LENGTH } from "@/lib/types";
 import {
   createProviderAction,
   createSkillAction,
@@ -18,9 +20,12 @@ import {
   Label,
   Select,
   Table,
+  Textarea,
   Th,
 } from "@/components/ui";
 import { tableRowClass } from "@/lib/table";
+
+const INSTRUCTIONS_HINT = `Markdown is fine. Sent to the model with every call, so keep it focused (limit ${SKILL_INSTRUCTIONS_MAX_LENGTH.toLocaleString("en-US")} characters). The field's own prompt still says what to write; these say how.`;
 
 export default async function SettingsPage() {
   const [providers, skills, chatSettings] = await Promise.all([
@@ -111,10 +116,10 @@ export default async function SettingsPage() {
       <section>
         <h2 className="mb-4 font-sans text-base font-extrabold">Skills</h2>
         <p className="mb-4 max-w-2xl text-sm text-charcoal/60">
-          A skill is a named recipe: a provider and model, plus an optional effort level and
-          output-token limit. Users pick a skill by name in the Form Builder — the recipe
-          behind it lives here. Leave effort or tokens on the default to use the model&rsquo;s
-          own behavior.
+          A skill is a named recipe: a provider and model, plus an optional effort level,
+          output-token limit and standing instructions. Users pick a skill by name in the
+          Form Builder — the recipe behind it lives here. Leave effort or tokens on the
+          default to use the model&rsquo;s own behavior.
         </p>
         <Table>
           <thead>
@@ -138,7 +143,8 @@ export default async function SettingsPage() {
               skills.map((skill, i) => {
                 const formId = `skill-form-${skill.id}`;
                 return (
-                  <tr key={skill.id} className={tableRowClass(i)}>
+                  <Fragment key={skill.id}>
+                  <tr className={i % 2 === 1 ? "bg-charcoal/[0.02]" : ""}>
                     <td className="px-4 py-3">
                       <Input
                         form={formId}
@@ -170,6 +176,29 @@ export default async function SettingsPage() {
                       </div>
                     </td>
                   </tr>
+                  <tr className={tableRowClass(i)}>
+                    <td colSpan={6} className="px-4 pb-3">
+                      <details>
+                        <summary className="cursor-pointer text-xs font-bold uppercase tracking-wide text-charcoal/60">
+                          Instructions
+                          {skill.instructions
+                            ? ` — ${skill.instructions.length.toLocaleString("en-US")} characters`
+                            : " — none"}
+                        </summary>
+                        <Textarea
+                          form={formId}
+                          name="instructions"
+                          defaultValue={skill.instructions ?? ""}
+                          rows={8}
+                          maxLength={SKILL_INSTRUCTIONS_MAX_LENGTH}
+                          placeholder="Standing instructions for this skill, in markdown — e.g. an SEO/GEO writing guide."
+                          className="mt-2 font-mono text-xs"
+                        />
+                        <p className="mt-1 text-xs text-charcoal/50">{INSTRUCTIONS_HINT}</p>
+                      </details>
+                    </td>
+                  </tr>
+                  </Fragment>
                 );
               })
             )}
@@ -195,6 +224,17 @@ export default async function SettingsPage() {
               layout="card"
               tuning={{ effort: null, maxOutputTokens: null }}
             />
+            <Field>
+              <Label>Instructions (optional)</Label>
+              <Textarea
+                name="instructions"
+                rows={6}
+                maxLength={SKILL_INSTRUCTIONS_MAX_LENGTH}
+                placeholder="Standing instructions for this skill, in markdown — e.g. an SEO/GEO writing guide."
+                className="font-mono text-xs"
+              />
+              <p className="mt-1 text-xs text-charcoal/50">{INSTRUCTIONS_HINT}</p>
+            </Field>
             <Button type="submit" className="self-start">
               Create skill
             </Button>

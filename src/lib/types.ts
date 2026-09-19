@@ -26,10 +26,12 @@ export type EffortLevel = "low" | "medium" | "high" | "xhigh" | "max";
 
 /**
  * A skill is a named "recipe" managed by an admin in Settings: a provider +
- * model, plus optional tuning (effort, output-token limit). Picking one in the
- * Form Builder selects that recipe for an automated field — it carries no
+ * model, plus optional tuning (effort, output-token limit) and standing
+ * `instructions` (markdown, sent as part of the system prompt). Picking one in
+ * the Form Builder selects that recipe for an automated field — it carries no
  * other requirements (source field, prompt) for the field it's attached to.
- * Null tuning values mean "use the model's default".
+ * Null tuning values mean "use the model's default"; null instructions mean
+ * the skill adds none.
  */
 export type AiSkill = {
   id: string;
@@ -38,9 +40,13 @@ export type AiSkill = {
   model: string | null;
   effort: EffortLevel | null;
   max_output_tokens: number | null;
+  instructions: string | null;
   created_at: string;
   updated_at: string;
 };
+
+/** Cap on a skill's instructions — they're sent with every call, so keep them focused. */
+export const SKILL_INSTRUCTIONS_MAX_LENGTH = 30000;
 
 /** The Create chat assistant's provider+model, configured separately from the skills list. */
 export type ChatSettings = {
