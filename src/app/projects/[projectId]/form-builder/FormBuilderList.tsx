@@ -24,6 +24,7 @@ import { FieldForm } from "./FieldForm";
 import { saveFormAction } from "./actions";
 import {
   createDraftId,
+  missingSkillMessage,
   toDraftField,
   toDraftFieldInput,
   type DraftField,
@@ -100,8 +101,12 @@ function SortableFieldRow({
           <Badge color={field.input_type === "automated" ? "teal" : "charcoal"}>
             {field.input_type}
           </Badge>
-          {field.input_type === "automated" && field.skill_id ? (
-            <Badge color="teal">{skillsById[field.skill_id]?.name ?? "Unknown skill"}</Badge>
+          {field.input_type === "automated" ? (
+            field.skill_id ? (
+              <Badge color="teal">{skillsById[field.skill_id]?.name ?? "Unknown skill"}</Badge>
+            ) : (
+              <Badge color="coral">No skill</Badge>
+            )
           ) : null}
           {field.input_type === "automated" && field.automation_source_field_id ? (
             <span className="text-xs text-charcoal/50">
@@ -125,14 +130,21 @@ function SortableFieldRow({
 function SaveButton({
   dirty,
   isSaving,
+  error,
   onSave,
 }: {
   dirty: boolean;
   isSaving: boolean;
+  error: string | null;
   onSave: () => void;
 }) {
   return (
-    <div className="flex justify-end">
+    <div className="flex items-center justify-end gap-3">
+      {error ? (
+        <p role="alert" className="text-sm text-coral">
+          {error}
+        </p>
+      ) : null}
       <button
         type="button"
         onClick={onSave}
@@ -176,6 +188,7 @@ export function FormBuilderList({
   const [syncedFields, setSyncedFields] = useState(savedFields);
   const [addOpen, setAddOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [isSaving, startTransition] = useTransition();
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -224,6 +237,7 @@ export function FormBuilderList({
   function handleUpdateField(id: string, values: Omit<DraftField, "id">) {
     setDraftFields((prev) => prev.map((f) => (f.id === id ? { id, ...values } : f)));
     setEditingId(null);
+    setSaveError(null);
   }
 
   function handleRemoveField(id: string) {
@@ -231,14 +245,21 @@ export function FormBuilderList({
   }
 
   function handleSave() {
+    const missingSkill = draftFields.filter((f) => f.input_type === "automated" && !f.skill_id);
+    if (missingSkill.length > 0) {
+      setSaveError(missingSkillMessage(missingSkill.map((f) => f.name)));
+      return;
+    }
+    setSaveError(null);
     startTransition(async () => {
-      await saveFormAction(projectId, draftFields.map(toDraftFieldInput));
+      const result = await saveFormAction(projectId, draftFields.map(toDraftFieldInput));
+      if (result?.error) setSaveError(result.error);
     });
   }
 
   return (
     <div className="flex flex-col gap-3">
-      <SaveButton dirty={dirty} isSaving={isSaving} onSave={handleSave} />
+      <SaveButton dirty={dirty} isSaving={isSaving} error={saveError} onSave={handleSave} />
 
       <DndContext
         id="form-builder-fields"
@@ -297,7 +318,7 @@ export function FormBuilderList({
         </Button>
       )}
 
-      <SaveButton dirty={dirty} isSaving={isSaving} onSave={handleSave} />
+      <SaveButton dirty={dirty} isSaving={isSaving} error={saveError} onSave={handleSave} />
     </div>
   );
 }

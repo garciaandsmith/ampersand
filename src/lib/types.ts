@@ -17,20 +17,42 @@ export type AiProvider = {
 
 export type AiProviderPublic = Omit<AiProvider, "api_key">;
 
+/** A model an admin added to the dropdowns from a provider's live model list. */
+export type EnabledModel = {
+  provider_id: string;
+  model: string;
+};
+
 /**
- * A skill is just a named shortcut for a provider+model pair, managed by an
- * admin in Settings. Picking one in the Form Builder does nothing beyond
- * selecting which provider/model an automated field uses — it carries no
+ * Provider-neutral effort scale. Each provider maps it onto its own dial
+ * (Anthropic `output_config.effort`, OpenAI `reasoning_effort`). Which levels a
+ * model accepts is listed per model in `src/lib/ai/models.ts`.
+ */
+export type EffortLevel = "low" | "medium" | "high" | "xhigh" | "max";
+
+/**
+ * A skill is a named "recipe" managed by an admin in Settings: a provider +
+ * model, plus optional tuning (effort, output-token limit) and standing
+ * `instructions` (markdown, sent as part of the system prompt). Picking one in
+ * the Form Builder selects that recipe for an automated field — it carries no
  * other requirements (source field, prompt) for the field it's attached to.
+ * Null tuning values mean "use the model's default"; null instructions mean
+ * the skill adds none.
  */
 export type AiSkill = {
   id: string;
   name: string;
   provider_id: string | null;
   model: string | null;
+  effort: EffortLevel | null;
+  max_output_tokens: number | null;
+  instructions: string | null;
   created_at: string;
   updated_at: string;
 };
+
+/** Cap on a skill's instructions — they're sent with every call, so keep them focused. */
+export const SKILL_INSTRUCTIONS_MAX_LENGTH = 30000;
 
 /** The Create chat assistant's provider+model, configured separately from the skills list. */
 export type ChatSettings = {
