@@ -9,23 +9,30 @@ import {
   updateFieldAutomationSource,
   updateFieldOrder,
 } from "@/lib/data/fields";
-import { isNewDraftId, type DraftFieldInput } from "./draft";
+import { isNewDraftId, missingSkillMessage, type DraftFieldInput } from "./draft";
 
 // Persists the whole form in one go: creates, updates, and deletes are
 // diffed against the current DB state, and the incoming array order
 // becomes the new sort_order. A new field can reference another new
 // field as its automation source (a forward reference to a row that
 // doesn't have a real id yet), so ids are resolved in two passes.
-export async function saveFormAction(projectId: string, draftFields: DraftFieldInput[]) {
+//
+// Validation problems come back as `{ error }` rather than being thrown, so
+// the form can show them inline instead of crashing into the error overlay.
+export async function saveFormAction(
+  projectId: string,
+  draftFields: DraftFieldInput[],
+): Promise<{ error: string } | undefined> {
   if (!projectId) throw new Error("Project is required");
 
   for (const f of draftFields) {
     if (!f.name.trim() || !f.dataType) {
-      throw new Error("Every field needs a name and a data type");
+      return { error: "Every field needs a name and a data type" };
     }
-    if (f.inputType === "automated" && !f.skillId) {
-      throw new Error(`"${f.name}" needs a skill selected`);
-    }
+  }
+  const missingSkill = draftFields.filter((f) => f.inputType === "automated" && !f.skillId);
+  if (missingSkill.length > 0) {
+    return { error: missingSkillMessage(missingSkill.map((f) => f.name)) };
   }
 
   const existing = await listFields(projectId);

@@ -22,6 +22,13 @@ export type DraftFieldInput = {
   skillId: string | null;
 };
 
+export function missingSkillMessage(names: string[]): string {
+  const quoted = names.map((n) => `"${n}"`).join(", ");
+  return names.length === 1
+    ? `${quoted} needs a skill selected`
+    : `These automated fields need a skill selected: ${quoted}`;
+}
+
 const NEW_ID_PREFIX = "new:";
 
 export function isNewDraftId(id: string): boolean {
