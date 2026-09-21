@@ -241,6 +241,8 @@ export function FormBuilderList({
   }
 
   function handleRemoveField(id: string) {
+    const field = draftFields.find((f) => f.id === id);
+    if (field && !window.confirm(`Remove the field "${field.name}"?`)) return;
     setDraftFields((prev) => prev.filter((f) => f.id !== id));
   }
 
