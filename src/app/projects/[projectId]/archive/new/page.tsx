@@ -1,6 +1,9 @@
 import { listFields } from "@/lib/data/fields";
 import { NewArchiveItemForm } from "./NewArchiveItemForm";
 
+// Server actions on this page run AI calls (e.g. transcription) that can outlast the platform's default timeout.
+export const maxDuration = 300;
+
 export default async function NewArchiveItemPage({
   params,
 }: {

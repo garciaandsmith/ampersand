@@ -1,4 +1,4 @@
-import type { AiProviderType, EffortLevel } from "@/lib/types";
+import type { AiProviderType, EffortLevel, SkillKind } from "@/lib/types";
 
 export const EFFORT_LABELS: Record<EffortLevel, string> = {
   low: "Low",
@@ -49,6 +49,9 @@ export const MODEL_CATALOG: Record<AiProviderType, ModelInfo[]> = {
     { id: "gpt-5.6-luna", label: "GPT-5.6 Luna", effortLevels: BASIC_EFFORT_LEVELS, maxOutputTokens: CEILING },
     { id: "gpt-image-2.5-sunburst", label: "GPT Image 2.5 Sunburst", effortLevels: [], maxOutputTokens: null },
     { id: "gpt-image-2.5-flare", label: "GPT Image 2.5 Flare", effortLevels: [], maxOutputTokens: null },
+    { id: "gpt-4o-transcribe", label: "GPT-4o Transcribe (audio/video → text)", effortLevels: [], maxOutputTokens: null },
+    { id: "gpt-4o-mini-transcribe", label: "GPT-4o Mini Transcribe (audio/video → text)", effortLevels: [], maxOutputTokens: null },
+    { id: "whisper-1", label: "Whisper (audio/video → text)", effortLevels: [], maxOutputTokens: null },
   ],
 };
 
@@ -66,6 +69,40 @@ export function modelOptions(type: AiProviderType, enabledModelIds: string[]): M
     .sort()
     .map((id): ModelInfo => ({ id, label: id, effortLevels: [], maxOutputTokens: null }));
   return [...known, ...extras];
+}
+
+/**
+ * What a model *looks like* it does, guessed from its id. Providers' model
+ * lists (OpenAI's especially) don't say, so this only drives suggestions and the
+ * "Available models" Type column — the skill's own `kind` is what decides
+ * behaviour, and an admin can always override the guess.
+ */
+export type ModelGuess = "chat" | "transcription" | "image" | "embedding" | "speech" | "other";
+
+export const MODEL_GUESS_LABELS: Record<ModelGuess, string> = {
+  chat: "Chat",
+  transcription: "Transcription",
+  image: "Image",
+  embedding: "Embedding",
+  speech: "Speech",
+  other: "Other",
+};
+
+export function guessModelKind(modelId: string): ModelGuess {
+  const id = modelId.toLowerCase();
+  // Streaming/live models use different endpoints from the file-based ones we call.
+  if (/realtime|live|moderation|search-preview|computer-use/.test(id)) return "other";
+  if (/whisper|transcribe/.test(id)) return "transcription";
+  if (/image|dall-e/.test(id)) return "image";
+  if (/embed/.test(id)) return "embedding";
+  if (/tts|speech/.test(id)) return "speech";
+  return "chat";
+}
+
+/** Whether a model looks suitable for a skill kind (false = worth a warning, not a block). */
+export function modelFitsSkillKind(kind: SkillKind, modelId: string): boolean {
+  const guess = guessModelKind(modelId);
+  return kind === "transcription" ? guess === "transcription" : guess === "chat";
 }
 
 export function findModelInfo(type: AiProviderType, modelId: string | null): ModelInfo | undefined {

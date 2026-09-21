@@ -3,7 +3,7 @@
 import { useMemo, useEffect, useState, type FormEvent } from "react";
 import { X } from "lucide-react";
 import type { AiSkill, FieldDataType } from "@/lib/types";
-import { FIELD_DATA_TYPE_LABELS } from "@/lib/types";
+import { FIELD_DATA_TYPE_LABELS, SKILL_KIND_LABELS } from "@/lib/types";
 import { Button, Field, Input, Label, Select, Textarea } from "@/components/ui";
 import type { DraftField } from "./draft";
 
@@ -28,7 +28,11 @@ export function FieldForm({
     field?.input_type ?? "manual",
   );
   const [skillId, setSkillId] = useState<string>(field?.skill_id ?? skills[0]?.id ?? "");
+  const [sourceId, setSourceId] = useState<string>(field?.automation_source_field_id ?? "");
   const [dirty, setDirty] = useState(false);
+
+  const selectedSkill = skills.find((s) => s.id === skillId);
+  const sourceField = existingFields.find((f) => f.id === sourceId);
 
   const showOptions = dataType === "single_select" || dataType === "multi_select";
   const sourceOptions = useMemo(
@@ -80,6 +84,7 @@ export function FieldForm({
       setDataType("text");
       setInputType("manual");
       setSkillId(skills[0]?.id ?? "");
+      setSourceId("");
     }
     setDirty(false);
   }
@@ -167,7 +172,7 @@ export function FieldForm({
               </Select>
               <p className="mt-1 text-xs text-charcoal/50">
                 Picks the provider and model this field&rsquo;s generation uses, set by an
-                admin in Settings.
+                admin in Settings.{selectedSkill ? ` Type: ${SKILL_KIND_LABELS[selectedSkill.kind ?? "chat"]}.` : ""}
               </p>
             </Field>
 
@@ -175,7 +180,8 @@ export function FieldForm({
               <Label>Input (source field, optional)</Label>
               <Select
                 name="automationSourceFieldId"
-                defaultValue={field?.automation_source_field_id ?? ""}
+                value={sourceId}
+                onChange={(e) => setSourceId(e.target.value)}
               >
                 <option value="">— none —</option>
                 {sourceOptions.map((f) => (
@@ -184,6 +190,18 @@ export function FieldForm({
                   </option>
                 ))}
               </Select>
+              {selectedSkill?.kind === "transcription" && sourceField?.data_type !== "file" ? (
+                <p className="mt-1 text-xs text-coral">
+                  &ldquo;{selectedSkill.name}&rdquo; is a transcription skill, so its input must be
+                  a file field holding audio or video.
+                </p>
+              ) : null}
+              {selectedSkill?.kind !== "transcription" && sourceField?.data_type === "file" ? (
+                <p className="mt-1 text-xs text-charcoal/50">
+                  Chat skills can read images and PDFs from a file field. For audio or video, use
+                  a transcription skill.
+                </p>
+              ) : null}
             </Field>
 
             <Field>
@@ -194,6 +212,11 @@ export function FieldForm({
                 placeholder='e.g. "Select a maximum of 10 relevant tags that represent the main topics in this description"'
                 defaultValue={field?.automation_prompt ?? ""}
               />
+              {selectedSkill?.kind === "transcription" ? (
+                <p className="mt-1 text-xs text-charcoal/50">
+                  Not used — a transcription skill writes the transcript as it is.
+                </p>
+              ) : null}
               <p className="mt-1 text-xs text-charcoal/50">
                 The answer is generated in this field&rsquo;s data type
                 {showOptions ? " and must be one of its options" : ""}.

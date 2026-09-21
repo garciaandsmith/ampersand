@@ -1,7 +1,7 @@
 import "server-only";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { NO_PARAMS, type GenerationParams } from "@/lib/ai/models";
-import type { AiProvider, AiProviderPublic, AiSkill, ChatSettings, EnabledModel } from "@/lib/types";
+import type { AiProvider, AiProviderPublic, AiSkill, ChatSettings, EnabledModel, SkillKind } from "@/lib/types";
 
 export async function listProviders(): Promise<AiProviderPublic[]> {
   const { data, error } = await supabaseAdmin()
@@ -90,10 +90,12 @@ export async function listSkills(): Promise<AiSkill[]> {
 
 type SkillInput = {
   name: string;
+  kind: SkillKind;
   providerId: string | null;
   model: string | null;
   params: GenerationParams;
-  instructions: string | null;
+  /** Undefined leaves the stored instructions untouched (transcription skills, whose form doesn't show them). */
+  instructions?: string | null;
 };
 
 export async function createSkill(input: SkillInput): Promise<AiSkill> {
@@ -101,11 +103,12 @@ export async function createSkill(input: SkillInput): Promise<AiSkill> {
     .from("ai_skills")
     .insert({
       name: input.name,
+      kind: input.kind,
       provider_id: input.providerId,
       model: input.model,
       effort: input.params.effort,
       max_output_tokens: input.params.maxOutputTokens,
-      instructions: input.instructions,
+      instructions: input.instructions ?? null,
     })
     .select("*")
     .single();
@@ -119,11 +122,12 @@ export async function updateSkill(id: string, input: SkillInput): Promise<AiSkil
     .from("ai_skills")
     .update({
       name: input.name,
+      kind: input.kind,
       provider_id: input.providerId,
       model: input.model,
       effort: input.params.effort,
       max_output_tokens: input.params.maxOutputTokens,
-      instructions: input.instructions,
+      ...(input.instructions !== undefined ? { instructions: input.instructions } : {}),
       updated_at: new Date().toISOString(),
     })
     .eq("id", id)
@@ -170,6 +174,8 @@ export async function setChatSettings(input: {
 export type ResolvedModel = {
   provider: AiProvider;
   model: string;
+  /** Which API to call. The chat assistant is always "chat". */
+  kind: SkillKind;
   params: GenerationParams;
   /** Standing instructions from the skill, added to the system prompt. Null for chat and blank skills. */
   instructions: string | null;
@@ -179,6 +185,7 @@ function toResolved(
   row: {
     provider_id: string | null;
     model: string | null;
+    kind?: SkillKind;
     effort?: AiSkill["effort"];
     max_output_tokens?: number | null;
     instructions?: string | null;
@@ -192,7 +199,14 @@ function toResolved(
     row.effort !== undefined || row.max_output_tokens !== undefined
       ? { effort: row.effort ?? null, maxOutputTokens: row.max_output_tokens ?? null }
       : NO_PARAMS;
-  return { provider, model: row.model, params, instructions: row.instructions?.trim() || null };
+  return {
+    provider,
+    model: row.model,
+    kind: row.kind ?? "chat",
+    params,
+    // Transcription models take no instructions; ignore any left over from before the kind was switched.
+    instructions: row.kind === "transcription" ? null : row.instructions?.trim() || null,
+  };
 }
 
 /** Resolves the Create chat assistant's configured provider (with API key) + model. Server-only. */

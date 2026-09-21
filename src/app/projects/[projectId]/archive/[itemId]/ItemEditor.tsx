@@ -1,11 +1,11 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { Sparkles } from "lucide-react";
 import type { FormField } from "@/lib/types";
-import { Badge, Button, Card, Field, IconButton, Input, Label, Textarea } from "@/components/ui";
+import { Button, Card, Field, Input, Label, Textarea } from "@/components/ui";
 import { updateArchiveItemAction } from "./actions";
 import { generateAutomatedFieldsAction } from "../new/actions";
+import { GeneratedFieldsCard } from "../GeneratedFieldsCard";
 
 function ValueInput({
   field,
@@ -63,8 +63,9 @@ export function ItemEditor({
   const [values, setValues] = useState<Record<string, string>>(initialValues);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
-  const [isGenerating, startGenerating] = useTransition();
-  const [generatingFieldId, setGeneratingFieldId] = useState<string | null>(null);
+  const [, startGenerating] = useTransition();
+  const [generatingIds, setGeneratingIds] = useState<string[]>([]);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
 
   const editableManualFields = useMemo(
@@ -77,22 +78,37 @@ export function ItemEditor({
     setValues((prev) => ({ ...prev, [fieldId]: v }));
   }
 
-  function handleGenerate(fieldId?: string) {
+  const sourceNames = useMemo(() => {
+    const byId = Object.fromEntries(manualFields.map((f) => [f.id, f.name]));
+    return Object.fromEntries(
+      automatedFields.flatMap((f) => {
+        const name = f.automation_source_field_id ? byId[f.automation_source_field_id] : null;
+        return name ? [[f.id, name]] : [];
+      }),
+    );
+  }, [manualFields, automatedFields]);
+
+  function handleGenerate(fieldIds: string[]) {
     setError(null);
-    setGeneratingFieldId(fieldId ?? null);
+    setFieldErrors((prev) =>
+      Object.fromEntries(Object.entries(prev).filter(([id]) => !fieldIds.includes(id))),
+    );
+    setGeneratingIds(fieldIds);
     startGenerating(async () => {
       try {
-        const results = await generateAutomatedFieldsAction({
+        const { values: generated, errors } = await generateAutomatedFieldsAction({
           projectId,
           manualValues: values,
           itemId,
-          fieldId,
+          fieldIds,
         });
-        setValues((prev) => ({ ...prev, ...results }));
+        if (Object.keys(generated).length > 0) setSaved(false);
+        setValues((prev) => ({ ...prev, ...generated }));
+        setFieldErrors((prev) => ({ ...prev, ...errors }));
       } catch (e) {
         setError((e as Error).message);
       } finally {
-        setGeneratingFieldId(null);
+        setGeneratingIds([]);
       }
     });
   }
@@ -141,48 +157,16 @@ export function ItemEditor({
         ))}
       </Card>
 
-      <Card>
-        <div className="mb-4 flex items-center justify-between">
-          <h3 className="font-sans text-sm font-extrabold">
-            Generated fields <Badge color="teal">AI</Badge>
-          </h3>
-          <Button
-            variant="secondary"
-            type="button"
-            onClick={() => handleGenerate()}
-            disabled={isGenerating}
-          >
-            <Sparkles className="h-4 w-4" />
-            {isGenerating && !generatingFieldId ? "Generating…" : "Generate all"}
-          </Button>
-        </div>
-        {automatedFields.length === 0 ? (
-          <p className="text-sm text-charcoal/50">No automated fields defined.</p>
-        ) : (
-          automatedFields.map((f) => (
-            <Field key={f.id}>
-              <div className="mb-1 flex items-center justify-between">
-                <Label>{f.name}</Label>
-                <IconButton
-                  type="button"
-                  title="Generate with AI"
-                  aria-label={`Generate ${f.name} with AI`}
-                  onClick={() => handleGenerate(f.id)}
-                  disabled={isGenerating}
-                  className={generatingFieldId === f.id ? "animate-pulse" : ""}
-                >
-                  <Sparkles className="h-3.5 w-3.5" />
-                </IconButton>
-              </div>
-              <Textarea
-                rows={2}
-                value={values[f.id] ?? ""}
-                onChange={(e) => setValue(f.id, e.target.value)}
-              />
-            </Field>
-          ))
-        )}
-      </Card>
+      <GeneratedFieldsCard
+        fields={automatedFields}
+        sourceNames={sourceNames}
+        values={values}
+        errors={fieldErrors}
+        generatingIds={generatingIds}
+        disabled={false}
+        onValueChange={setValue}
+        onGenerate={handleGenerate}
+      />
 
       <div className="flex items-center gap-3">
         {error ? (
