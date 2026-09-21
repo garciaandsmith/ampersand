@@ -1,8 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import type { AiProviderPublic, EnabledModel } from "@/lib/types";
-import { DEFAULT_MAX_OUTPUT_TOKENS, EFFORT_LABELS, modelOptions } from "@/lib/ai/models";
+import { SKILL_KIND_LABELS, type AiProviderPublic, type EnabledModel, type SkillKind } from "@/lib/types";
+import {
+  DEFAULT_MAX_OUTPUT_TOKENS,
+  EFFORT_LABELS,
+  guessModelKind,
+  modelFitsSkillKind,
+  modelOptions,
+} from "@/lib/ai/models";
 import { Field, Input, Label, Select } from "@/components/ui";
 
 /**
@@ -10,10 +16,13 @@ import { Field, Input, Label, Select } from "@/components/ui";
  * the `form` attribute so they can live in a table row or a plain card.
  * Reused for skill rows, the add-skill form, and the chat assistant setting.
  *
- * With `tuning` set, two more inputs follow — effort and output-token limit.
- * Their shape depends on the chosen model (per `MODEL_CATALOG`): unsupported
- * inputs are disabled, and a disabled input isn't submitted, so it saves as
- * "use the model's default".
+ * With `tuning` set (skills), a Type dropdown comes first and two more inputs
+ * follow — effort and output-token limit. Type is the skill's job (chat or
+ * transcription) and decides which API is called; it steers the model list
+ * (models that look right first, the rest marked) and switches effort/tokens
+ * off, since transcription models take neither. Otherwise their shape depends
+ * on the chosen model (per `MODEL_CATALOG`): unsupported inputs are disabled,
+ * and a disabled input isn't submitted, so it saves as "use the model's default".
  */
 export function ProviderModelFields({
   formId,
@@ -23,6 +32,8 @@ export function ProviderModelFields({
   initialModel,
   layout,
   tuning,
+  initialKind,
+  onKindChange,
 }: {
   /** Set only when these selects live outside their `<form>` (a table row); omit when nested directly inside one. */
   formId?: string;
@@ -34,11 +45,17 @@ export function ProviderModelFields({
   layout: "table" | "card";
   /** Show the effort + token-limit inputs, seeded with the skill's saved values. */
   tuning?: { effort: string | null; maxOutputTokens: number | null };
+  /** Skills only: the skill's saved type. Omit for the chat assistant, which is always chat. */
+  initialKind?: SkillKind;
+  /** Lets the parent react to the type (e.g. hide the instructions, which transcription skills don't use). */
+  onKindChange?: (kind: SkillKind) => void;
 }) {
   const [providerId, setProviderId] = useState(initialProviderId ?? "");
   const [modelId, setModelId] = useState(initialModel ?? "");
   const [effort, setEffort] = useState(tuning?.effort ?? "");
   const [tokens, setTokens] = useState(tuning?.maxOutputTokens?.toString() ?? "");
+  const [kind, setKind] = useState<SkillKind>(initialKind ?? "chat");
+  const isTranscription = kind === "transcription";
 
   const provider = providers.find((p) => p.id === providerId);
   const models = provider
@@ -51,9 +68,13 @@ export function ProviderModelFields({
   const selectedModelId = models.some((m) => m.id === modelId) ? modelId : "";
   const modelInfo = models.find((m) => m.id === selectedModelId);
 
-  const effortLevels = modelInfo?.effortLevels ?? [];
+  // Models that look right for the type come first; the rest stay selectable, just marked.
+  const fitting = initialKind ? models.filter((m) => modelFitsSkillKind(kind, m.id)) : models;
+  const notFitting = initialKind ? models.filter((m) => !modelFitsSkillKind(kind, m.id)) : [];
+
+  const effortLevels = isTranscription ? [] : (modelInfo?.effortLevels ?? []);
   const effortValue = (effortLevels as string[]).includes(effort) ? effort : "";
-  const maxTokens = modelInfo?.maxOutputTokens ?? null;
+  const maxTokens = isTranscription ? null : (modelInfo?.maxOutputTokens ?? null);
 
   function handleProviderChange(id: string) {
     setProviderId(id);
@@ -62,8 +83,26 @@ export function ProviderModelFields({
     setTokens("");
   }
 
+  function changeKind(next: SkillKind) {
+    setKind(next);
+    onKindChange?.(next);
+  }
+
+  function handleKindChange(next: SkillKind) {
+    changeKind(next);
+    // Transcription is OpenAI-only for now; drop an incompatible provider rather than save a broken pair.
+    if (next === "transcription" && provider?.type !== "openai") {
+      setProviderId("");
+      setModelId("");
+    }
+    setEffort("");
+    setTokens("");
+  }
+
   function handleModelChange(id: string) {
     setModelId(id);
+    // A suggestion, not a rule: a model that plainly transcribes pre-selects the Transcription type.
+    if (initialKind && kind === "chat" && guessModelKind(id) === "transcription") changeKind("transcription");
     const info = models.find((m) => m.id === id);
     if (!info || !(info.effortLevels as string[]).includes(effort)) setEffort("");
     if (!info || info.maxOutputTokens === null) setTokens("");
@@ -80,8 +119,8 @@ export function ProviderModelFields({
     >
       <option value="">— none —</option>
       {providers.map((p) => (
-        <option key={p.id} value={p.id}>
-          {p.name} ({p.type})
+        <option key={p.id} value={p.id} disabled={isTranscription && p.type !== "openai"}>
+          {p.name} ({p.type}){isTranscription && p.type !== "openai" ? " — no transcription" : ""}
         </option>
       ))}
     </Select>
@@ -97,9 +136,34 @@ export function ProviderModelFields({
       disabled={!provider}
     >
       <option value="">{provider ? "— select a model —" : "— pick a provider first —"}</option>
-      {models.map((m) => (
+      {fitting.map((m) => (
         <option key={m.id} value={m.id}>
           {m.label}
+        </option>
+      ))}
+      {notFitting.length > 0 ? (
+        <optgroup label={`Don't look like ${isTranscription ? "transcription" : "chat"} models`}>
+          {notFitting.map((m) => (
+            <option key={m.id} value={m.id}>
+              {m.label}
+            </option>
+          ))}
+        </optgroup>
+      ) : null}
+    </Select>
+  );
+
+  const kindSelect = (
+    <Select
+      form={formId}
+      name="kind"
+      value={kind}
+      onChange={(e) => handleKindChange(e.target.value as SkillKind)}
+      className="min-w-[190px]"
+    >
+      {(Object.keys(SKILL_KIND_LABELS) as SkillKind[]).map((k) => (
+        <option key={k} value={k}>
+          {SKILL_KIND_LABELS[k]}
         </option>
       ))}
     </Select>
@@ -115,7 +179,9 @@ export function ProviderModelFields({
       disabled={effortUnavailable}
       className="min-w-[150px]"
     >
-      {!modelInfo ? (
+      {isTranscription ? (
+        <option value="">Not used for transcription</option>
+      ) : !modelInfo ? (
         <option value="">— pick a model first —</option>
       ) : effortLevels.length === 0 ? (
         <option value="">Not available for this model</option>
@@ -145,7 +211,9 @@ export function ProviderModelFields({
       onChange={(e) => setTokens(e.target.value)}
       disabled={tokensUnavailable}
       placeholder={
-        !modelInfo
+        isTranscription
+          ? "Not used for transcription"
+          : !modelInfo
           ? "— pick a model first —"
           : maxTokens === null
             ? "Not available for this model"
@@ -158,6 +226,7 @@ export function ProviderModelFields({
   if (layout === "table") {
     return (
       <>
+        {initialKind ? <td className="px-4 py-3">{kindSelect}</td> : null}
         <td className="px-4 py-3">{providerSelect}</td>
         <td className="px-4 py-3">{modelSelect}</td>
         {tuning ? (
@@ -172,6 +241,17 @@ export function ProviderModelFields({
 
   return (
     <>
+      {initialKind ? (
+        <Field>
+          <Label>Type</Label>
+          {kindSelect}
+          <p className="mt-1 text-xs text-charcoal/50">
+            {isTranscription
+              ? "Turns an audio or video file into text. Transcription models take no effort, token limit or instructions."
+              : "Reads text, images and PDFs and writes text."}
+          </p>
+        </Field>
+      ) : null}
       <Field>
         <Label>Provider</Label>
         {providerSelect}

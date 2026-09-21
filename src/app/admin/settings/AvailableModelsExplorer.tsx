@@ -2,7 +2,8 @@
 
 import { useState, useTransition } from "react";
 import type { AiProviderPublic, EnabledModel } from "@/lib/types";
-import { Badge, Button, Card, Input, Table, Th } from "@/components/ui";
+import { MODEL_GUESS_LABELS, type ModelGuess } from "@/lib/ai/models";
+import { Badge, Button, Card, Input, Select, Table, Th } from "@/components/ui";
 import { tableRowClass } from "@/lib/table";
 import {
   listAllAvailableModelsAction,
@@ -31,6 +32,7 @@ export function AvailableModelsExplorer({
   const [result, setResult] = useState<AllAvailableModels | null>(null);
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [filter, setFilter] = useState("");
+  const [typeFilter, setTypeFilter] = useState<ModelGuess | "">("");
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -87,8 +89,10 @@ export function AvailableModelsExplorer({
     if (!result) return;
     // Tab-separated, so it pastes cleanly into a spreadsheet as well as a chat or doc.
     const text = [
-      ["Provider", "Model", "Date"],
-      ...result.rows.filter((r) => !r.notListed).map((r) => [r.provider, r.model, formatDate(r.createdAt)]),
+      ["Provider", "Model", "Type (guessed)", "Capabilities", "Date"],
+      ...result.rows
+        .filter((r) => !r.notListed)
+        .map((r) => [r.provider, r.model, MODEL_GUESS_LABELS[r.guess], r.capabilities.join(", "), formatDate(r.createdAt)]),
     ]
       .map((cols) => cols.join("\t"))
       .join("\n");
@@ -104,7 +108,9 @@ export function AvailableModelsExplorer({
   const needle = filter.trim().toLowerCase();
   const visibleRows = result
     ? result.rows.filter(
-        (r) => !needle || r.model.toLowerCase().includes(needle) || r.provider.toLowerCase().includes(needle),
+        (r) =>
+          (!typeFilter || r.guess === typeFilter) &&
+          (!needle || r.model.toLowerCase().includes(needle) || r.provider.toLowerCase().includes(needle)),
       )
     : [];
   const pickedCount = result ? result.rows.filter(isTicked).length : 0;
@@ -117,7 +123,9 @@ export function AvailableModelsExplorer({
         the ones you want in the provider/model dropdowns above, then save. Models a skill or the
         chat assistant uses stay ticked. Models outside our capability catalog use the
         provider&rsquo;s defaults for effort and output tokens, since we don&rsquo;t know what
-        they accept.
+        they accept. The Type column is a guess from the model&rsquo;s name (providers
+        don&rsquo;t say what a model does) — use it to find candidates; a skill&rsquo;s own
+        Type is what decides how it is called.
       </p>
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <Button type="button" variant="secondary" onClick={handleLoad} disabled={isLoading}>
@@ -132,12 +140,25 @@ export function AvailableModelsExplorer({
               {isSaving ? "Saving…" : `Save dropdown selection (${pickedCount})`}
             </Button>
             {saved ? <span className="text-xs text-charcoal/60">Saved — dropdowns updated.</span> : null}
+            <Select
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value as ModelGuess | "")}
+              aria-label="Filter by type"
+              className="ml-auto max-w-[160px]"
+            >
+              <option value="">All types</option>
+              {(Object.keys(MODEL_GUESS_LABELS) as ModelGuess[]).map((g) => (
+                <option key={g} value={g}>
+                  {MODEL_GUESS_LABELS[g]}
+                </option>
+              ))}
+            </Select>
             <Input
               type="search"
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
               placeholder="Filter models…"
-              className="ml-auto max-w-[220px]"
+              className="max-w-[220px]"
             />
           </>
         ) : null}
@@ -168,14 +189,15 @@ export function AvailableModelsExplorer({
                 <Th>In dropdowns</Th>
                 <Th>Provider</Th>
                 <Th>Model</Th>
+                <Th>Type</Th>
                 <Th>Date</Th>
               </tr>
             </thead>
             <tbody>
               {visibleRows.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="px-4 py-4 text-center text-charcoal/50">
-                    No models match &ldquo;{filter}&rdquo;.
+                  <td colSpan={5} className="px-4 py-4 text-center text-charcoal/50">
+                    No models match the current filters.
                   </td>
                 </tr>
               ) : (
@@ -197,6 +219,26 @@ export function AvailableModelsExplorer({
                         {r.model}{" "}
                         {locked ? <Badge color="teal">in use</Badge> : null}
                         {r.notListed ? <Badge color="yellow">not in live list</Badge> : null}
+                      </td>
+                      <td className="px-4 py-2">
+                        <span
+                          className="text-xs text-charcoal/70"
+                          title={
+                            r.capabilities.length
+                              ? "Type guessed from the model's name. Capabilities are reported by the provider."
+                              : "Guessed from the model's name — the provider's list doesn't say."
+                          }
+                        >
+                          {MODEL_GUESS_LABELS[r.guess]}
+                          <span className="text-charcoal/40"> (guessed)</span>
+                        </span>
+                        {r.capabilities.length ? (
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            {r.capabilities.map((c) => (
+                              <Badge key={c}>{c}</Badge>
+                            ))}
+                          </div>
+                        ) : null}
                       </td>
                       <td className="px-4 py-2 text-charcoal/60">{formatDate(r.createdAt)}</td>
                     </tr>

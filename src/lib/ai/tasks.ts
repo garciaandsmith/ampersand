@@ -1,11 +1,11 @@
 import "server-only";
 import { resolveChatProvider, type ResolvedModel } from "@/lib/data/providers";
-import { generateText } from "@/lib/ai/client";
+import { generateText, transcribeAudio } from "@/lib/ai/client";
 import type { FieldDataType } from "@/lib/types";
 
 export type GenerationSource =
   | { kind: "text"; text: string }
-  | { kind: "file"; mediaType: string; dataBase64: string };
+  | { kind: "file"; name: string; mediaType: string; data: Buffer };
 
 /** What the model must return so the value fits the field's data type. */
 function outputInstruction(dataType: FieldDataType, options: string[] | null): string {
@@ -45,6 +45,21 @@ export async function runFieldGeneration(input: {
   source?: GenerationSource;
   resolved: ResolvedModel;
 }): Promise<string> {
+  const { model, provider } = input.resolved;
+  const file = input.source?.kind === "file" ? input.source : null;
+  const isAudioOrVideo = !!file && (file.mediaType.startsWith("audio/") || file.mediaType.startsWith("video/"));
+
+  // The skill's kind decides which API is called, so the source has to agree with it.
+  if (input.resolved.kind === "transcription") {
+    if (!file || !isAudioOrVideo) {
+      throw new Error("This skill transcribes audio or video files, so its source must be a file field holding one.");
+    }
+    return transcribeAudio({ provider, model, data: file.data, fileName: file.name });
+  }
+  if (isAudioOrVideo) {
+    throw new Error("Audio and video can only be read by a skill of type Transcription. Change this field's skill, or set the skill's type in Admin → Settings.");
+  }
+
   const format = outputInstruction(input.dataType, input.options);
 
   const lines = [
@@ -63,15 +78,15 @@ export async function runFieldGeneration(input: {
   );
 
   let imageBase64: { mediaType: string; data: string } | undefined;
-  let documentBase64: { mediaType: "application/pdf"; data: string } | undefined;
-  if (input.source?.kind === "file") {
-    if (input.source.mediaType.startsWith("image/")) {
-      imageBase64 = { mediaType: input.source.mediaType, data: input.source.dataBase64 };
-    } else if (input.source.mediaType === "application/pdf") {
-      documentBase64 = { mediaType: "application/pdf", data: input.source.dataBase64 };
+  let documentBase64: { mediaType: "application/pdf"; data: string; name?: string } | undefined;
+  if (file) {
+    if (file.mediaType.startsWith("image/")) {
+      imageBase64 = { mediaType: file.mediaType, data: file.data.toString("base64") };
+    } else if (file.mediaType === "application/pdf") {
+      documentBase64 = { mediaType: "application/pdf", data: file.data.toString("base64"), name: file.name };
     } else {
       throw new Error(
-        `Source files of type "${input.source.mediaType}" aren't supported — only images and PDFs.`,
+        `Source files of type "${file.mediaType || "unknown"}" aren't supported — only images, PDFs, and audio/video (with a Transcription skill).`,
       );
     }
   }
@@ -85,8 +100,8 @@ export async function runFieldGeneration(input: {
   }
 
   return generateText({
-    provider: input.resolved.provider,
-    model: input.resolved.model,
+    provider,
+    model,
     system: system.join("\n\n"),
     prompt: lines.join("\n"),
     imageBase64,

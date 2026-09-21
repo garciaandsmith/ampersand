@@ -1,6 +1,6 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
-import OpenAI from "openai";
+import OpenAI, { toFile } from "openai";
 import type { AiProvider } from "@/lib/types";
 import { DEFAULT_MAX_OUTPUT_TOKENS, NO_PARAMS, normalizeParams, type GenerationParams } from "@/lib/ai/models";
 
@@ -47,12 +47,11 @@ export type GenerateTextInput = {
   /** Optional base64 image to include (data URL without the `data:` prefix stripped by caller). */
   imageBase64?: { mediaType: string; data: string };
   /**
-   * Optional base64 PDF to include. Anthropic accepts PDFs natively as a
-   * `document` content block (no extra library needed). OpenAI has no
-   * equivalent path wired up here yet — see the error thrown below — so this
-   * only works when `provider.type === "anthropic"`.
+   * Optional base64 PDF to include. Both providers accept PDFs natively —
+   * Anthropic as a `document` block, OpenAI as a `file` content part — so no
+   * text-extraction library is needed. `name` is required by OpenAI's format.
    */
-  documentBase64?: { mediaType: "application/pdf"; data: string };
+  documentBase64?: { mediaType: "application/pdf"; data: string; name?: string };
   /**
    * Optional tuning (effort, output-token limit). Anything the chosen model
    * doesn't support is dropped rather than sent, so a stale setting can't
@@ -123,23 +122,23 @@ export async function generateText(input: GenerateTextInput): Promise<string> {
   }
 
   if (provider.type === "openai") {
-    if (documentBase64) {
-      throw new Error(
-        "PDF input via OpenAI isn't implemented — OpenAI's chat API needs the Files API (or a text-extraction library like pdf-parse) for PDFs. Use a skill backed by an Anthropic model, which supports PDFs natively.",
-      );
-    }
     const client = new OpenAI({ apiKey: provider.api_key });
-    const content: OpenAI.Chat.ChatCompletionContentPart[] = imageBase64
-      ? [
-          { type: "text", text: prompt },
-          {
-            type: "image_url",
-            image_url: {
-              url: `data:${imageBase64.mediaType};base64,${imageBase64.data}`,
-            },
-          },
-        ]
-      : [{ type: "text", text: prompt }];
+    const content: OpenAI.Chat.ChatCompletionContentPart[] = [{ type: "text", text: prompt }];
+    if (documentBase64) {
+      content.push({
+        type: "file",
+        file: {
+          filename: documentBase64.name ?? "document.pdf",
+          file_data: `data:${documentBase64.mediaType};base64,${documentBase64.data}`,
+        },
+      });
+    }
+    if (imageBase64) {
+      content.push({
+        type: "image_url",
+        image_url: { url: `data:${imageBase64.mediaType};base64,${imageBase64.data}` },
+      });
+    }
 
     const response = await client.chat.completions.create({
       model,
@@ -155,4 +154,52 @@ export async function generateText(input: GenerateTextInput): Promise<string> {
   }
 
   throw new Error(`Unsupported provider type: ${provider.type}`);
+}
+
+/** OpenAI's transcription endpoint rejects files above this size. */
+export const TRANSCRIPTION_MAX_BYTES = 25 * 1024 * 1024;
+
+/**
+ * Speech-to-text: sends an audio (or video — the endpoint reads the audio
+ * track of mp4/webm) file to a transcription model and returns the transcript.
+ * Only OpenAI is wired up. Server-only.
+ */
+export async function transcribeAudio(input: {
+  provider: AiProvider;
+  model: string;
+  data: Buffer;
+  fileName: string;
+}): Promise<string> {
+  if (input.provider.type !== "openai") {
+    throw new Error("Transcription is only supported with OpenAI transcription models (e.g. whisper-1, gpt-4o-transcribe).");
+  }
+  if (input.data.byteLength > TRANSCRIPTION_MAX_BYTES) {
+    const mb = (input.data.byteLength / 1024 / 1024).toFixed(1);
+    throw new Error(`This file is ${mb} MB; OpenAI transcription accepts at most 25 MB. Upload a shorter or compressed version.`);
+  }
+  const client = new OpenAI({ apiKey: input.provider.api_key });
+  const file = await toFile(input.data, input.fileName);
+
+  // The diarize model labels who is speaking, but only in `diarized_json`, and it
+  // needs `chunking_strategy` for anything over 30 seconds. Other models return plain text.
+  if (/diarize/i.test(input.model)) {
+    // The SDK's overloads don't narrow to the diarized shape from `response_format`, hence the cast.
+    const result = (await client.audio.transcriptions.create({
+      file,
+      model: input.model,
+      response_format: "diarized_json",
+      chunking_strategy: "auto",
+    })) as unknown as OpenAI.Audio.Transcriptions.TranscriptionDiarized;
+    // Segments are often single clauses; merge consecutive ones from the same speaker into one turn.
+    const turns: { speaker: string; text: string }[] = [];
+    for (const s of result.segments) {
+      const last = turns[turns.length - 1];
+      if (last?.speaker === s.speaker) last.text += ` ${s.text.trim()}`;
+      else turns.push({ speaker: s.speaker, text: s.text.trim() });
+    }
+    return turns.map((t) => `Speaker ${t.speaker}: ${t.text}`).join("\n\n");
+  }
+
+  const result = await client.audio.transcriptions.create({ file, model: input.model });
+  return result.text.trim();
 }

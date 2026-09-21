@@ -1,6 +1,7 @@
 import "server-only";
 import { supabaseAdmin } from "@/lib/supabase/server";
-import type { ArchiveItem, ArchiveItemValue } from "@/lib/types";
+import { listFields } from "@/lib/data/fields";
+import type { ArchiveItem, ArchiveItemValue, StoredFileMeta } from "@/lib/types";
 
 export async function listArchiveItems(projectId: string): Promise<ArchiveItem[]> {
   const { data, error } = await supabaseAdmin()
@@ -76,11 +77,26 @@ export async function updateArchiveItemTitle(id: string, title: string | null): 
 
 export async function deleteArchiveItem(id: string): Promise<void> {
   const item = await getArchiveItem(id);
+  const paths = item ? await listItemFilePaths(item) : [];
   const { error } = await supabaseAdmin().from("archive_items").delete().eq("id", id);
   if (error) throw new Error(error.message);
-  if (item?.file_path) {
-    await supabaseAdmin().storage.from("archive").remove([item.file_path]);
+  await removeArchiveFiles(paths);
+}
+
+/** Every storage object an item owns: the legacy single file plus each file field's upload and thumbnail. */
+async function listItemFilePaths(item: ArchiveItem): Promise<string[]> {
+  const paths = new Set<string>();
+  if (item.file_path) paths.add(item.file_path);
+
+  const [fields, valuesByItem] = await Promise.all([listFields(item.project_id), getValuesForItems([item.id])]);
+  const fileFieldIds = new Set(fields.filter((f) => f.data_type === "file").map((f) => f.id));
+  for (const v of valuesByItem[item.id] ?? []) {
+    if (!fileFieldIds.has(v.field_id)) continue;
+    if (v.value_text) paths.add(v.value_text);
+    const thumbPath = (v.value_jsonb as StoredFileMeta | null)?.thumbPath;
+    if (thumbPath) paths.add(thumbPath);
   }
+  return [...paths];
 }
 
 export async function setItemValue(input: {
@@ -104,19 +120,44 @@ export async function setItemValue(input: {
   if (error) throw new Error(error.message);
 }
 
-export async function uploadArchiveFile(
+/** True when `path` sits inside this project's folder of the archive bucket. */
+export function isProjectStoragePath(projectId: string, path: string): boolean {
+  return path.startsWith(`${projectId}/`) && !path.includes("..");
+}
+
+/**
+ * Mints one-time signed upload tokens so the browser can send a file (and its
+ * thumbnail) straight to storage. Going through a server action instead would
+ * hit Next.js's request-body limit (1 MB by default) and Vercel's (~4.5 MB),
+ * which rules out audio/video.
+ */
+export async function createUploadTargets(
   projectId: string,
-  file: File,
-): Promise<{ path: string }> {
-  const ext = file.name.includes(".") ? file.name.split(".").pop() : "";
-  const path = `${projectId}/${crypto.randomUUID()}${ext ? `.${ext}` : ""}`;
+  fileName: string,
+  withThumbnail: boolean,
+): Promise<{
+  file: { path: string; token: string };
+  thumb: { path: string; token: string } | null;
+}> {
+  const rawExt = fileName.includes(".") ? fileName.split(".").pop()!.toLowerCase() : "";
+  const ext = /^[a-z0-9]{1,8}$/.test(rawExt) ? `.${rawExt}` : "";
+  const base = `${projectId}/${crypto.randomUUID()}`;
+  const bucket = supabaseAdmin().storage.from("archive");
 
-  const { error } = await supabaseAdmin()
-    .storage.from("archive")
-    .upload(path, file, { contentType: file.type || undefined });
+  const sign = async (path: string) => {
+    const { data, error } = await bucket.createSignedUploadUrl(path);
+    if (error || !data) throw new Error(error?.message ?? "Could not create an upload URL.");
+    return { path, token: data.token };
+  };
 
-  if (error) throw new Error(error.message);
-  return { path };
+  const file = await sign(`${base}${ext}`);
+  const thumb = withThumbnail ? await sign(`${base}.thumb.jpg`) : null;
+  return { file, thumb };
+}
+
+export async function removeArchiveFiles(paths: string[]): Promise<void> {
+  if (paths.length === 0) return;
+  await supabaseAdmin().storage.from("archive").remove(paths);
 }
 
 export async function getArchiveFileSignedUrl(path: string): Promise<string | null> {
@@ -128,10 +169,9 @@ export async function getArchiveFileSignedUrl(path: string): Promise<string | nu
   return data.signedUrl;
 }
 
-/** Downloads an already-uploaded archive file's bytes, base64-encoded, for AI skills (image_recognition, document_parsing). */
-export async function getArchiveFileBase64(path: string): Promise<string | null> {
+/** Downloads an archive file's bytes so an AI skill can read them. */
+export async function getArchiveFileBytes(path: string): Promise<Buffer | null> {
   const { data, error } = await supabaseAdmin().storage.from("archive").download(path);
   if (error || !data) return null;
-  const arrayBuffer = await data.arrayBuffer();
-  return Buffer.from(arrayBuffer).toString("base64");
+  return Buffer.from(await data.arrayBuffer());
 }

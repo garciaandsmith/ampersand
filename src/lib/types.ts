@@ -31,7 +31,20 @@ export type EnabledModel = {
 export type EffortLevel = "low" | "medium" | "high" | "xhigh" | "max";
 
 /**
- * A skill is a named "recipe" managed by an admin in Settings: a provider +
+ * Which job a skill does, and so which provider API it calls. Standard across
+ * providers: each provider translates it in `src/lib/ai/client.ts`.
+ * - chat: text/vision generation (reads text, images, PDFs).
+ * - transcription: speech-to-text on an audio/video file.
+ */
+export type SkillKind = "chat" | "transcription";
+
+export const SKILL_KIND_LABELS: Record<SkillKind, string> = {
+  chat: "Text & vision (chat)",
+  transcription: "Transcription (audio/video → text)",
+};
+
+/**
+ * A skill is a named "recipe" managed by an admin in Settings: a kind, a provider +
  * model, plus optional tuning (effort, output-token limit) and standing
  * `instructions` (markdown, sent as part of the system prompt). Picking one in
  * the Form Builder selects that recipe for an automated field — it carries no
@@ -42,6 +55,7 @@ export type EffortLevel = "low" | "medium" | "high" | "xhigh" | "max";
 export type AiSkill = {
   id: string;
   name: string;
+  kind: SkillKind;
   provider_id: string | null;
   model: string | null;
   effort: EffortLevel | null;
@@ -110,6 +124,17 @@ export type ArchiveItem = {
   file_type: string | null;
   created_at: string;
   updated_at: string;
+};
+
+/**
+ * What a file-type field's `value_jsonb` holds (its `value_text` is the storage
+ * path). `thumbPath` is a JPEG preview generated in the browser at upload time
+ * for images and videos; absent on older records and on other file kinds.
+ */
+export type StoredFileMeta = {
+  name?: string;
+  type?: string;
+  thumbPath?: string | null;
 };
 
 export type ArchiveItemValue = {

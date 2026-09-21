@@ -7,8 +7,12 @@ import {
 } from "@/lib/data/archive";
 import { listFields } from "@/lib/data/fields";
 import { Button, Card } from "@/components/ui";
+import type { StoredFileMeta } from "@/lib/types";
 import { ItemEditor } from "./ItemEditor";
 import { deleteArchiveItemAction } from "./actions";
+
+// Server actions on this page run AI calls (e.g. transcription) that can outlast the platform's default timeout.
+export const maxDuration = 300;
 
 export default async function ArchiveItemPage({
   params,
@@ -29,15 +33,21 @@ export default async function ArchiveItemPage({
 
   const fileField = fields.find((f) => f.data_type === "file");
   const fileValue = fileField ? values.find((v) => v.field_id === fileField.id) : undefined;
-  const fileMeta = fileValue?.value_jsonb as { name?: string; type?: string } | undefined;
+  const fileMeta = fileValue?.value_jsonb as StoredFileMeta | undefined;
   // Fall back to the legacy single-file columns for records created before file
   // fields moved into the generic field/value model.
   const filePath = fileValue?.value_text ?? item.file_path;
   const fileName = fileMeta?.name ?? item.file_name;
   const fileType = fileMeta?.type ?? item.file_type;
 
-  const signedUrl = filePath ? await getArchiveFileSignedUrl(filePath) : null;
+  const [signedUrl, thumbUrl] = await Promise.all([
+    filePath ? getArchiveFileSignedUrl(filePath) : null,
+    fileMeta?.thumbPath ? getArchiveFileSignedUrl(fileMeta.thumbPath) : null,
+  ]);
   const isImage = fileType?.startsWith("image/");
+  const isVideo = fileType?.startsWith("video/");
+  const isAudio = fileType?.startsWith("audio/");
+  const hasPreview = isImage || isVideo || isAudio;
 
   const manualFields = fields.filter((f) => f.input_type === "manual");
   const automatedFields = fields.filter((f) => f.input_type === "automated");
@@ -61,26 +71,35 @@ export default async function ArchiveItemPage({
       </div>
 
       {signedUrl ? (
-        <Card className="max-w-md">
-          {isImage ? (
+        <Card className="max-w-xl">
+          {isVideo ? (
+            <video
+              src={signedUrl}
+              poster={thumbUrl ?? undefined}
+              controls
+              preload="none"
+              className="max-h-96 w-full rounded bg-charcoal/5"
+            />
+          ) : isImage ? (
             <Image
               src={signedUrl}
               alt={fileName ?? ""}
-              width={640}
-              height={480}
+              width={960}
+              height={720}
               unoptimized
-              className="h-auto w-full rounded"
+              className="h-auto max-h-96 w-full rounded object-contain"
             />
-          ) : (
-            <a
-              href={signedUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="font-bold text-charcoal underline"
-            >
-              Download {fileName}
-            </a>
-          )}
+          ) : isAudio ? (
+            <audio src={signedUrl} controls className="w-full" />
+          ) : null}
+          <a
+            href={signedUrl}
+            target="_blank"
+            rel="noreferrer"
+            className={`font-bold text-charcoal underline ${hasPreview ? "mt-3 block text-xs" : ""}`}
+          >
+            {hasPreview ? `Open original — ${fileName}` : `Download ${fileName}`}
+          </a>
         </Card>
       ) : null}
 

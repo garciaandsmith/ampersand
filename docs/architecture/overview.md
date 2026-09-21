@@ -11,7 +11,7 @@ behind each choice referenced here.
   only via the service-role key from server-side code. See
   [ADR 0002](../decisions/0002-supabase-schema-isolation.md).
 - **Storage**: a private Supabase Storage bucket, `archive`, for uploaded
-  Archive files. Files are served via short-lived signed URLs
+  Archive files (uploaded directly from the browser, see ADR 0007). Files are served via short-lived signed URLs
   (`getArchiveFileSignedUrl`), never made public.
 - **AI**: Anthropic and OpenAI SDKs behind one provider-agnostic interface,
   configured at runtime from the Admin UI. See
@@ -85,7 +85,9 @@ runner, so the SQL history stays legible.
 ## Skills
 
 A "skill" (`ampersand.ai_skills`, `src/lib/data/providers.ts`) is an
-admin-managed, freeform name attached to a "recipe": a provider + model, plus
+admin-managed, freeform name attached to a "recipe": a **type** (`kind`: chat
+or transcription — the job it does, which decides the API called; see
+[ADR 0008](../decisions/0008-skill-kind.md)), a provider + model, plus
 an optional effort level and output-token limit (`effort`,
 `max_output_tokens`; null = the model's default), and optional standing
 `instructions` (markdown, e.g. an SEO/GEO writing guide). Instructions are
@@ -110,12 +112,29 @@ An automated field is self-describing: a **source** (optional field whose
 content is read — text, an image or a PDF, decided by the source field's
 data type and the file's MIME type), a **prompt** (the instruction), a
 **data type** (+ options for lists) that defines the output format, and a
-**skill** that picks the provider/model. `generateAutomatedFieldsAction`
+**skill** that picks the provider/model. Sources can be text, a URL (fetched
+server-side and passed as text), or a file (read from storage: images, PDFs,
+and audio/video for transcription models). `generateAutomatedFieldsAction`
 (`src/app/projects/[projectId]/archive/new/actions.ts`) resolves the skill
 and calls one generic function, `runFieldGeneration`
 (`src/lib/ai/tasks.ts`), which appends format instructions for the data
 type. Text-based output only for now; file/image output is not implemented.
-PDF sources only work with Anthropic-backed skills.
+Audio/video sources need a skill of type Transcription (OpenAI models such as
+`whisper-1` / `gpt-4o-transcribe`, 25 MB max); chat skills can't read them.
+Generation returns `{ values, errors }` — failures are reported per field and
+never written into a value.
+
+In the UI both record forms share `GeneratedFieldsCard`: each field has its
+own generate button, and **Select and generate** lets the user tick any subset
+of fields (all / empty only / none) and generate them in one batch.
+
+## Files and uploads
+
+Picking a file uploads it straight from the browser to the `archive` bucket
+(signed upload token from `createUploadTargetsAction`), plus a browser-made
+JPEG thumbnail for images and videos, so skills can read it before the record
+is saved and previews show immediately. See
+[ADR 0007](../decisions/0007-direct-to-storage-uploads.md).
 
 ## AI task flow
 

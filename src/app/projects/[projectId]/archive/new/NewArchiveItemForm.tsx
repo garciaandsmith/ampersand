@@ -1,18 +1,11 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { Sparkles } from "lucide-react";
 import type { FormField } from "@/lib/types";
-import { Badge, Button, Card, Field, IconButton, Input, Label, Textarea } from "@/components/ui";
-import { createArchiveItemAction, generateAutomatedFieldsAction } from "./actions";
-
-async function fileToBase64(file: File): Promise<string> {
-  const buffer = await file.arrayBuffer();
-  const bytes = new Uint8Array(buffer);
-  let binary = "";
-  for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
-  return btoa(binary);
-}
+import { Button, Card, Field, Input, Label, Textarea } from "@/components/ui";
+import { createArchiveItemAction, generateAutomatedFieldsAction, type StagedFile } from "./actions";
+import { FileUploadField } from "../FileUploadField";
+import { GeneratedFieldsCard } from "../GeneratedFieldsCard";
 
 function ManualInput({
   field,
@@ -54,7 +47,13 @@ function ManualInput({
       type={field.data_type === "date" ? "date" : field.data_type === "number" ? "number" : "text"}
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      placeholder={field.data_type === "tags" ? "comma, separated, tags" : undefined}
+      placeholder={
+        field.data_type === "tags"
+          ? "comma, separated, tags"
+          : field.data_type === "url"
+            ? "https://…"
+            : undefined
+      }
     />
   );
 }
@@ -69,39 +68,49 @@ export function NewArchiveItemForm({
   automatedFields: FormField[];
 }) {
   const [title, setTitle] = useState("");
-  const [fileByField, setFileByField] = useState<Record<string, File | null>>({});
+  // Files are uploaded to storage the moment they're picked; this holds their references.
+  const [stagedFiles, setStagedFiles] = useState<Record<string, StagedFile>>({});
+  const [uploadingFieldIds, setUploadingFieldIds] = useState<string[]>([]);
   const [manualValues, setManualValues] = useState<Record<string, string>>({});
   const [automatedValues, setAutomatedValues] = useState<Record<string, string>>({});
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
-  const [isGenerating, startGenerating] = useTransition();
-  const [generatingFieldId, setGeneratingFieldId] = useState<string | null>(null);
+  const [generatingIds, setGeneratingIds] = useState<string[]>([]);
+  const [, startGenerating] = useTransition();
   const [isSaving, startSaving] = useTransition();
 
-  const fieldsById = useMemo(
-    () => Object.fromEntries(manualFields.map((f) => [f.id, f])),
-    [manualFields],
-  );
+  const sourceNames = useMemo(() => {
+    const byId = Object.fromEntries(manualFields.map((f) => [f.id, f.name]));
+    return Object.fromEntries(
+      automatedFields.flatMap((f) => {
+        const name = f.automation_source_field_id ? byId[f.automation_source_field_id] : null;
+        return name ? [[f.id, name]] : [];
+      }),
+    );
+  }, [manualFields, automatedFields]);
 
-  function handleGenerate(fieldId?: string) {
+  const isUploading = uploadingFieldIds.length > 0;
+
+  function handleGenerate(fieldIds: string[]) {
     setError(null);
-    setGeneratingFieldId(fieldId ?? null);
+    setFieldErrors((prev) =>
+      Object.fromEntries(Object.entries(prev).filter(([id]) => !fieldIds.includes(id))),
+    );
+    setGeneratingIds(fieldIds);
     startGenerating(async () => {
       try {
-        const manualFiles: Record<string, { name: string; type: string; dataBase64: string }> = {};
-        for (const [fieldId, file] of Object.entries(fileByField)) {
-          if (file) manualFiles[fieldId] = { name: file.name, type: file.type, dataBase64: await fileToBase64(file) };
-        }
-        const results = await generateAutomatedFieldsAction({
+        const { values, errors } = await generateAutomatedFieldsAction({
           projectId,
           manualValues,
-          manualFiles,
-          fieldId,
+          stagedFiles,
+          fieldIds,
         });
-        setAutomatedValues((prev) => ({ ...prev, ...results }));
+        setAutomatedValues((prev) => ({ ...prev, ...values }));
+        setFieldErrors((prev) => ({ ...prev, ...errors }));
       } catch (e) {
         setError((e as Error).message);
       } finally {
-        setGeneratingFieldId(null);
+        setGeneratingIds([]);
       }
     });
   }
@@ -113,13 +122,8 @@ export function NewArchiveItemForm({
         const formData = new FormData();
         formData.set("projectId", projectId);
         formData.set("title", title);
-        for (const [fieldId, file] of Object.entries(fileByField)) {
-          if (file) formData.set(`file:${fieldId}`, file);
-        }
-        formData.set(
-          "values",
-          JSON.stringify({ ...manualValues, ...automatedValues }),
-        );
+        formData.set("files", JSON.stringify(stagedFiles));
+        formData.set("values", JSON.stringify({ ...manualValues, ...automatedValues }));
         await createArchiveItemAction(formData);
       } catch (e) {
         setError((e as Error).message);
@@ -128,8 +132,7 @@ export function NewArchiveItemForm({
   }
 
   const hasManualInput =
-    Object.values(manualValues).some((v) => v.trim()) ||
-    Object.values(fileByField).some((f) => f !== null);
+    Object.values(manualValues).some((v) => v.trim()) || Object.keys(stagedFiles).length > 0;
 
   return (
     <div className="flex max-w-2xl flex-col gap-6">
@@ -149,12 +152,22 @@ export function NewArchiveItemForm({
           <Field key={f.id}>
             <Label>{f.name}</Label>
             {f.data_type === "file" ? (
-              <input
-                type="file"
-                onChange={(e) =>
-                  setFileByField((prev) => ({ ...prev, [f.id]: e.target.files?.[0] ?? null }))
+              <FileUploadField
+                projectId={projectId}
+                value={stagedFiles[f.id] ?? null}
+                onChange={(file) =>
+                  setStagedFiles((prev) => {
+                    const next = { ...prev };
+                    if (file) next[f.id] = file;
+                    else delete next[f.id];
+                    return next;
+                  })
                 }
-                className="w-full rounded border border-coral/40 bg-white px-3 py-2 text-sm"
+                onBusyChange={(busy) =>
+                  setUploadingFieldIds((prev) =>
+                    busy ? [...prev.filter((id) => id !== f.id), f.id] : prev.filter((id) => id !== f.id),
+                  )
+                }
               />
             ) : (
               <div className="rounded border border-coral/40 p-0.5">
@@ -175,66 +188,18 @@ export function NewArchiveItemForm({
         ) : null}
       </Card>
 
-      <Card>
-        <div className="mb-4 flex items-center justify-between">
-          <h3 className="font-sans text-sm font-extrabold">
-            Generated fields <Badge color="teal">AI</Badge>
-          </h3>
-          <Button
-            variant="secondary"
-            type="button"
-            onClick={() => handleGenerate()}
-            disabled={!hasManualInput || isGenerating}
-          >
-            <Sparkles className="h-4 w-4" />
-            {isGenerating && !generatingFieldId ? "Generating…" : "Generate all"}
-          </Button>
-        </div>
-
-        {automatedFields.length === 0 ? (
-          <p className="text-sm text-charcoal/50">
-            No automated fields defined yet. Add some in the Form Builder.
-          </p>
-        ) : (
-          automatedFields.map((f) => {
-            const source = f.automation_source_field_id
-              ? fieldsById[f.automation_source_field_id]
-              : null;
-            return (
-              <Field key={f.id}>
-                <div className="mb-1 flex items-center justify-between">
-                  <Label>
-                    {f.name}
-                    {source ? (
-                      <span className="ml-1 font-normal normal-case text-charcoal/40">
-                        (from {source.name})
-                      </span>
-                    ) : null}
-                  </Label>
-                  <IconButton
-                    type="button"
-                    title="Generate with AI"
-                    aria-label={`Generate ${f.name} with AI`}
-                    onClick={() => handleGenerate(f.id)}
-                    disabled={!hasManualInput || isGenerating}
-                    className={generatingFieldId === f.id ? "animate-pulse" : ""}
-                  >
-                    <Sparkles className="h-3.5 w-3.5" />
-                  </IconButton>
-                </div>
-                <Textarea
-                  rows={2}
-                  value={automatedValues[f.id] ?? ""}
-                  onChange={(e) =>
-                    setAutomatedValues((prev) => ({ ...prev, [f.id]: e.target.value }))
-                  }
-                  placeholder="Generated automatically — editable before saving"
-                />
-              </Field>
-            );
-          })
-        )}
-      </Card>
+      <GeneratedFieldsCard
+        fields={automatedFields}
+        sourceNames={sourceNames}
+        values={automatedValues}
+        errors={fieldErrors}
+        generatingIds={generatingIds}
+        disabled={!hasManualInput || isUploading}
+        disabledHint={isUploading ? "Wait for the upload to finish" : "Fill in or upload something first"}
+        placeholder="Generated automatically — editable before saving"
+        onValueChange={(id, v) => setAutomatedValues((prev) => ({ ...prev, [id]: v }))}
+        onGenerate={handleGenerate}
+      />
 
       <div>
         {error ? (
@@ -242,7 +207,7 @@ export function NewArchiveItemForm({
             {error}
           </p>
         ) : null}
-        <Button onClick={handleSave} disabled={isSaving}>
+        <Button onClick={handleSave} disabled={isSaving || isUploading}>
           {isSaving ? "Saving…" : "Save to archive"}
         </Button>
       </div>
