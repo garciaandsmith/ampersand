@@ -17,6 +17,12 @@ export type AiProvider = {
 
 export type AiProviderPublic = Omit<AiProvider, "api_key">;
 
+/** A model an admin added to the dropdowns from a provider's live model list. */
+export type EnabledModel = {
+  provider_id: string;
+  model: string;
+};
+
 /**
  * Provider-neutral effort scale. Each provider maps it onto its own dial
  * (Anthropic `output_config.effort`, OpenAI `reasoning_effort`). Which levels a

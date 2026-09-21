@@ -52,6 +52,22 @@ export const MODEL_CATALOG: Record<AiProviderType, ModelInfo[]> = {
   ],
 };
 
+/**
+ * The dropdown options for a provider type: only the models an admin ticked in
+ * Settings → "Available models". Catalog models keep their label and tuning
+ * settings; any other ticked model shows by its raw id with no effort or token
+ * settings, since we can't tell what it accepts.
+ */
+export function modelOptions(type: AiProviderType, enabledModelIds: string[]): ModelInfo[] {
+  const catalog = MODEL_CATALOG[type];
+  const known = catalog.filter((m) => enabledModelIds.includes(m.id));
+  const extras = enabledModelIds
+    .filter((id) => !catalog.some((m) => m.id === id))
+    .sort()
+    .map((id): ModelInfo => ({ id, label: id, effortLevels: [], maxOutputTokens: null }));
+  return [...known, ...extras];
+}
+
 export function findModelInfo(type: AiProviderType, modelId: string | null): ModelInfo | undefined {
   return modelId ? MODEL_CATALOG[type].find((m) => m.id === modelId) : undefined;
 }

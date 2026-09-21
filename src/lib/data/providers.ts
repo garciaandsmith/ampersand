@@ -1,7 +1,7 @@
 import "server-only";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { NO_PARAMS, type GenerationParams } from "@/lib/ai/models";
-import type { AiProvider, AiProviderPublic, AiSkill, ChatSettings } from "@/lib/types";
+import type { AiProvider, AiProviderPublic, AiSkill, ChatSettings, EnabledModel } from "@/lib/types";
 
 export async function listProviders(): Promise<AiProviderPublic[]> {
   const { data, error } = await supabaseAdmin()
@@ -42,6 +42,39 @@ export async function createProvider(input: {
 export async function deleteProvider(id: string): Promise<void> {
   const { error } = await supabaseAdmin().from("ai_providers").delete().eq("id", id);
   if (error) throw new Error(error.message);
+}
+
+/** Models an admin added to the dropdowns from a provider's live list, on top of the built-in catalog. */
+export async function listEnabledModels(): Promise<EnabledModel[]> {
+  const { data, error } = await supabaseAdmin()
+    .from("ai_enabled_models")
+    .select("provider_id, model")
+    .order("model", { ascending: true });
+
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+/**
+ * Replaces the enabled models of the given providers with `selections`.
+ * Providers not listed in `providerIds` are left alone.
+ */
+export async function replaceEnabledModels(
+  providerIds: string[],
+  selections: EnabledModel[],
+): Promise<void> {
+  if (providerIds.length === 0) return;
+  const db = supabaseAdmin();
+
+  const { error: deleteError } = await db
+    .from("ai_enabled_models")
+    .delete()
+    .in("provider_id", providerIds);
+  if (deleteError) throw new Error(deleteError.message);
+
+  if (selections.length === 0) return;
+  const { error: insertError } = await db.from("ai_enabled_models").insert(selections);
+  if (insertError) throw new Error(insertError.message);
 }
 
 /** Skills are admin-managed recipes: a name, a provider + model, and optional tuning. */

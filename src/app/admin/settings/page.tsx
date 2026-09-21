@@ -1,5 +1,5 @@
 import { Fragment } from "react";
-import { getChatSettings, listProviders, listSkills } from "@/lib/data/providers";
+import { getChatSettings, listEnabledModels, listProviders, listSkills } from "@/lib/data/providers";
 import { SKILL_INSTRUCTIONS_MAX_LENGTH } from "@/lib/types";
 import {
   createProviderAction,
@@ -30,10 +30,11 @@ import { tableRowClass } from "@/lib/table";
 const INSTRUCTIONS_HINT = `Markdown is fine. Sent to the model with every call, so keep it focused (limit ${SKILL_INSTRUCTIONS_MAX_LENGTH.toLocaleString("en-US")} characters). The field's own prompt still says what to write; these say how.`;
 
 export default async function SettingsPage() {
-  const [providers, skills, chatSettings] = await Promise.all([
+  const [providers, skills, chatSettings, enabledModels] = await Promise.all([
     listProviders(),
     listSkills(),
     getChatSettings(),
+    listEnabledModels(),
   ]);
 
   return (
@@ -109,10 +110,6 @@ export default async function SettingsPage() {
             </form>
           </Card>
         </div>
-
-        <div className="mt-6">
-          <AvailableModelsExplorer providers={providers} />
-        </div>
       </section>
 
       <section>
@@ -162,6 +159,7 @@ export default async function SettingsPage() {
                       key={`${skill.id}:${skill.updated_at}`}
                       formId={formId}
                       providers={providers}
+                      enabledModels={enabledModels}
                       initialProviderId={skill.provider_id}
                       initialModel={skill.model}
                       layout="table"
@@ -226,6 +224,7 @@ export default async function SettingsPage() {
               // New key after each created skill so the form starts blank again.
               key={skills.length}
               providers={providers}
+              enabledModels={enabledModels}
               initialProviderId={null}
               initialModel={null}
               layout="card"
@@ -259,6 +258,7 @@ export default async function SettingsPage() {
             <ProviderModelFields
               key={`${chatSettings.provider_id}:${chatSettings.model}`}
               providers={providers}
+              enabledModels={enabledModels}
               initialProviderId={chatSettings.provider_id}
               initialModel={chatSettings.model}
               layout="card"
@@ -268,6 +268,17 @@ export default async function SettingsPage() {
             </Button>
           </ActionForm>
         </Card>
+      </section>
+
+      <section>
+        <AvailableModelsExplorer
+          providers={providers}
+          enabledModels={enabledModels}
+          inUse={[
+            ...skills.map((s) => ({ provider_id: s.provider_id, model: s.model })),
+            { provider_id: chatSettings.provider_id, model: chatSettings.model },
+          ].flatMap((m) => (m.provider_id && m.model ? [{ provider_id: m.provider_id, model: m.model }] : []))}
+        />
       </section>
     </div>
   );

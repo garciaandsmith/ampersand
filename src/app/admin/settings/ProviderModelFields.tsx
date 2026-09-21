@@ -1,13 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import type { AiProviderPublic } from "@/lib/types";
-import {
-  DEFAULT_MAX_OUTPUT_TOKENS,
-  EFFORT_LABELS,
-  MODEL_CATALOG,
-  findModelInfo,
-} from "@/lib/ai/models";
+import type { AiProviderPublic, EnabledModel } from "@/lib/types";
+import { DEFAULT_MAX_OUTPUT_TOKENS, EFFORT_LABELS, modelOptions } from "@/lib/ai/models";
 import { Field, Input, Label, Select } from "@/components/ui";
 
 /**
@@ -23,6 +18,7 @@ import { Field, Input, Label, Select } from "@/components/ui";
 export function ProviderModelFields({
   formId,
   providers,
+  enabledModels,
   initialProviderId,
   initialModel,
   layout,
@@ -31,6 +27,8 @@ export function ProviderModelFields({
   /** Set only when these selects live outside their `<form>` (a table row); omit when nested directly inside one. */
   formId?: string;
   providers: AiProviderPublic[];
+  /** Models the admin ticked in "Available models"; these are the dropdown's options. */
+  enabledModels: EnabledModel[];
   initialProviderId: string | null;
   initialModel: string | null;
   layout: "table" | "card";
@@ -43,10 +41,15 @@ export function ProviderModelFields({
   const [tokens, setTokens] = useState(tuning?.maxOutputTokens?.toString() ?? "");
 
   const provider = providers.find((p) => p.id === providerId);
-  const models = provider ? MODEL_CATALOG[provider.type] : [];
-  // A saved model that's no longer in the catalog shows as "select a model".
+  const models = provider
+    ? modelOptions(
+        provider.type,
+        enabledModels.filter((m) => m.provider_id === provider.id).map((m) => m.model),
+      )
+    : [];
+  // A saved model that isn't ticked shows as "select a model".
   const selectedModelId = models.some((m) => m.id === modelId) ? modelId : "";
-  const modelInfo = provider ? findModelInfo(provider.type, selectedModelId) : undefined;
+  const modelInfo = models.find((m) => m.id === selectedModelId);
 
   const effortLevels = modelInfo?.effortLevels ?? [];
   const effortValue = (effortLevels as string[]).includes(effort) ? effort : "";
@@ -61,7 +64,7 @@ export function ProviderModelFields({
 
   function handleModelChange(id: string) {
     setModelId(id);
-    const info = provider ? findModelInfo(provider.type, id) : undefined;
+    const info = models.find((m) => m.id === id);
     if (!info || !(info.effortLevels as string[]).includes(effort)) setEffort("");
     if (!info || info.maxOutputTokens === null) setTokens("");
     else if (Number(tokens) > info.maxOutputTokens) setTokens(String(info.maxOutputTokens));
