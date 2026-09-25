@@ -101,7 +101,9 @@ export function NewArchiveItemForm({
       try {
         const { values, errors } = await generateAutomatedFieldsAction({
           projectId,
-          manualValues,
+          // Includes already-generated automated values too, so a field can
+          // use another automated field (e.g. a JSON-producing one) as its source.
+          knownValues: { ...manualValues, ...automatedValues },
           stagedFiles,
           fieldIds,
         });

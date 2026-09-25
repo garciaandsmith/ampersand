@@ -98,7 +98,7 @@ export function ItemEditor({
       try {
         const { values: generated, errors } = await generateAutomatedFieldsAction({
           projectId,
-          manualValues: values,
+          knownValues: values,
           itemId,
           fieldIds,
         });

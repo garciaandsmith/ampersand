@@ -99,6 +99,19 @@ export const FIELD_DATA_TYPE_LABELS: Record<FieldDataType, string> = {
 
 export type InputType = "manual" | "automated";
 
+/**
+ * How an automated field gets its value. 'ai' (default) calls a skill,
+ * following automation_prompt. 'json_extract' reads automation_json_key out
+ * of the source field's content (expected to be a JSON object) with no model
+ * call — free and instant, but only as good as the JSON it's reading.
+ */
+export type AutomationKind = "ai" | "json_extract";
+
+export const AUTOMATION_KIND_LABELS: Record<AutomationKind, string> = {
+  ai: "AI call",
+  json_extract: "Extract from JSON",
+};
+
 export type FormField = {
   id: string;
   project_id: string;
@@ -108,8 +121,11 @@ export type FormField = {
   input_type: InputType;
   automation_source_field_id: string | null;
   automation_prompt: string | null;
-  /** Which skill's provider+model this field's generation uses. Null on legacy rows or manual fields. */
+  /** Which skill's provider+model this field's generation uses. Null on legacy rows, manual fields, and json_extract fields. */
   skill_id: string | null;
+  automation_kind: AutomationKind;
+  /** The key read out of the source field's JSON when automation_kind is 'json_extract'. */
+  automation_json_key: string | null;
   sort_order: number;
   is_core: boolean;
   created_at: string;

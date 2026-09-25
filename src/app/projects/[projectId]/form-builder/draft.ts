@@ -1,4 +1,4 @@
-import type { FieldDataType, FormField, InputType } from "@/lib/types";
+import type { AutomationKind, FieldDataType, FormField, InputType } from "@/lib/types";
 
 export type DraftField = {
   id: string;
@@ -9,6 +9,8 @@ export type DraftField = {
   automation_source_field_id: string | null;
   automation_prompt: string | null;
   skill_id: string | null;
+  automation_kind: AutomationKind;
+  automation_json_key: string | null;
 };
 
 export type DraftFieldInput = {
@@ -20,6 +22,8 @@ export type DraftFieldInput = {
   automationSourceFieldId: string | null;
   automationPrompt: string | null;
   skillId: string | null;
+  automationKind: AutomationKind;
+  automationJsonKey: string | null;
 };
 
 export function missingSkillMessage(names: string[]): string {
@@ -27,6 +31,13 @@ export function missingSkillMessage(names: string[]): string {
   return names.length === 1
     ? `${quoted} needs a skill selected`
     : `These automated fields need a skill selected: ${quoted}`;
+}
+
+export function missingJsonKeyMessage(names: string[]): string {
+  const quoted = names.map((n) => `"${n}"`).join(", ");
+  return names.length === 1
+    ? `${quoted} needs a JSON key to extract`
+    : `These automated fields need a JSON key to extract: ${quoted}`;
 }
 
 const NEW_ID_PREFIX = "new:";
@@ -49,6 +60,8 @@ export function toDraftField(field: FormField): DraftField {
     automation_source_field_id: field.automation_source_field_id,
     automation_prompt: field.automation_prompt,
     skill_id: field.skill_id,
+    automation_kind: field.automation_kind,
+    automation_json_key: field.automation_json_key,
   };
 }
 
@@ -62,5 +75,7 @@ export function toDraftFieldInput(field: DraftField): DraftFieldInput {
     automationSourceFieldId: field.automation_source_field_id,
     automationPrompt: field.automation_prompt,
     skillId: field.skill_id,
+    automationKind: field.automation_kind,
+    automationJsonKey: field.automation_json_key,
   };
 }

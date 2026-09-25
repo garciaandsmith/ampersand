@@ -1,6 +1,6 @@
 import "server-only";
 import { supabaseAdmin } from "@/lib/supabase/server";
-import type { FieldDataType, FormField, InputType } from "@/lib/types";
+import type { AutomationKind, FieldDataType, FormField, InputType } from "@/lib/types";
 
 export async function listFields(projectId: string): Promise<FormField[]> {
   const { data, error } = await supabaseAdmin()
@@ -22,6 +22,8 @@ export async function createField(input: {
   automationSourceFieldId?: string | null;
   automationPrompt?: string | null;
   skillId?: string | null;
+  automationKind?: AutomationKind;
+  automationJsonKey?: string | null;
   sortOrder: number;
   isCore?: boolean;
 }): Promise<FormField> {
@@ -36,6 +38,8 @@ export async function createField(input: {
       automation_source_field_id: input.automationSourceFieldId ?? null,
       automation_prompt: input.automationPrompt ?? null,
       skill_id: input.skillId ?? null,
+      automation_kind: input.automationKind ?? "ai",
+      automation_json_key: input.automationJsonKey ?? null,
       sort_order: input.sortOrder,
       is_core: input.isCore ?? false,
     })
@@ -56,6 +60,8 @@ export async function updateField(
     automationSourceFieldId?: string | null;
     automationPrompt?: string | null;
     skillId?: string | null;
+    automationKind?: AutomationKind;
+    automationJsonKey?: string | null;
   },
 ): Promise<FormField> {
   const { data, error } = await supabaseAdmin()
@@ -68,6 +74,8 @@ export async function updateField(
       automation_source_field_id: input.automationSourceFieldId ?? null,
       automation_prompt: input.automationPrompt ?? null,
       skill_id: input.skillId ?? null,
+      automation_kind: input.automationKind ?? "ai",
+      automation_json_key: input.automationJsonKey ?? null,
     })
     .eq("id", id)
     .select("*")

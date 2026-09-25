@@ -1,11 +1,13 @@
 import "server-only";
 import { resolveChatProvider, type ResolvedModel } from "@/lib/data/providers";
-import { generateText, transcribeAudio } from "@/lib/ai/client";
+import { generateText, transcribeMedia } from "@/lib/ai/client";
 import type { FieldDataType } from "@/lib/types";
 
 export type GenerationSource =
   | { kind: "text"; text: string }
-  | { kind: "file"; name: string; mediaType: string; data: Buffer };
+  | { kind: "file"; name: string; mediaType: string; data: Buffer }
+  /** Audio/video, too big to load into memory: read by URL (ffmpeg streams it) instead of by bytes. */
+  | { kind: "media"; name: string; url: string };
 
 /** What the model must return so the value fits the field's data type. */
 function outputInstruction(dataType: FieldDataType, options: string[] | null): string {
@@ -47,16 +49,16 @@ export async function runFieldGeneration(input: {
 }): Promise<string> {
   const { model, provider } = input.resolved;
   const file = input.source?.kind === "file" ? input.source : null;
-  const isAudioOrVideo = !!file && (file.mediaType.startsWith("audio/") || file.mediaType.startsWith("video/"));
+  const media = input.source?.kind === "media" ? input.source : null;
 
   // The skill's kind decides which API is called, so the source has to agree with it.
   if (input.resolved.kind === "transcription") {
-    if (!file || !isAudioOrVideo) {
+    if (!media) {
       throw new Error("This skill transcribes audio or video files, so its source must be a file field holding one.");
     }
-    return transcribeAudio({ provider, model, data: file.data, fileName: file.name });
+    return transcribeMedia({ provider, model, url: media.url, fileName: media.name });
   }
-  if (isAudioOrVideo) {
+  if (media) {
     throw new Error("Audio and video can only be read by a skill of type Transcription. Change this field's skill, or set the skill's type in Admin → Settings.");
   }
 

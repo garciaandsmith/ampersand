@@ -24,6 +24,7 @@ import { FieldForm } from "./FieldForm";
 import { saveFormAction } from "./actions";
 import {
   createDraftId,
+  missingJsonKeyMessage,
   missingSkillMessage,
   toDraftField,
   toDraftFieldInput,
@@ -101,7 +102,10 @@ function SortableFieldRow({
           <Badge color={field.input_type === "automated" ? "teal" : "charcoal"}>
             {field.input_type}
           </Badge>
-          {field.input_type === "automated" ? (
+          {field.input_type === "automated" && field.automation_kind === "json_extract" ? (
+            <Badge color="teal">JSON key: {field.automation_json_key || "?"}</Badge>
+          ) : null}
+          {field.input_type === "automated" && field.automation_kind === "ai" ? (
             field.skill_id ? (
               <Badge color="teal">{skillsById[field.skill_id]?.name ?? "Unknown skill"}</Badge>
             ) : (
@@ -170,6 +174,8 @@ function sameField(a: DraftField, b: DraftField) {
     a.automation_source_field_id === b.automation_source_field_id &&
     a.automation_prompt === b.automation_prompt &&
     a.skill_id === b.skill_id &&
+    a.automation_kind === b.automation_kind &&
+    a.automation_json_key === b.automation_json_key &&
     JSON.stringify(a.options) === JSON.stringify(b.options)
   );
 }
@@ -247,9 +253,21 @@ export function FormBuilderList({
   }
 
   function handleSave() {
-    const missingSkill = draftFields.filter((f) => f.input_type === "automated" && !f.skill_id);
+    const missingSkill = draftFields.filter(
+      (f) => f.input_type === "automated" && f.automation_kind === "ai" && !f.skill_id,
+    );
     if (missingSkill.length > 0) {
       setSaveError(missingSkillMessage(missingSkill.map((f) => f.name)));
+      return;
+    }
+    const missingJsonKey = draftFields.filter(
+      (f) =>
+        f.input_type === "automated" &&
+        f.automation_kind === "json_extract" &&
+        !f.automation_json_key?.trim(),
+    );
+    if (missingJsonKey.length > 0) {
+      setSaveError(missingJsonKeyMessage(missingJsonKey.map((f) => f.name)));
       return;
     }
     setSaveError(null);

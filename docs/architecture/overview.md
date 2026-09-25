@@ -120,7 +120,8 @@ and calls one generic function, `runFieldGeneration`
 (`src/lib/ai/tasks.ts`), which appends format instructions for the data
 type. Text-based output only for now; file/image output is not implemented.
 Audio/video sources need a skill of type Transcription (OpenAI models such as
-`whisper-1` / `gpt-4o-transcribe`, 25 MB max); chat skills can't read them.
+`whisper-1` / `gpt-4o-transcribe`); ffmpeg extracts and chunks the audio so
+file size isn't limited by the API's 25 MB cap. Chat skills can't read them.
 Generation returns `{ values, errors }` — failures are reported per field and
 never written into a value.
 

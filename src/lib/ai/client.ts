@@ -2,6 +2,7 @@ import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import OpenAI, { toFile } from "openai";
 import type { AiProvider } from "@/lib/types";
+import { extractAudioChunks } from "@/lib/media/audio";
 import { DEFAULT_MAX_OUTPUT_TOKENS, NO_PARAMS, normalizeParams, type GenerationParams } from "@/lib/ai/models";
 
 export type AvailableModel = {
@@ -159,12 +160,50 @@ export async function generateText(input: GenerateTextInput): Promise<string> {
 /** OpenAI's transcription endpoint rejects files above this size. */
 export const TRANSCRIPTION_MAX_BYTES = 25 * 1024 * 1024;
 
+/** How many audio chunks are sent to the provider at once. */
+const TRANSCRIPTION_CONCURRENCY = 3;
+
 /**
- * Speech-to-text: sends an audio (or video — the endpoint reads the audio
- * track of mp4/webm) file to a transcription model and returns the transcript.
- * Only OpenAI is wired up. Server-only.
+ * Transcribes an audio or video file of any size: ffmpeg extracts the audio
+ * from the file's URL and cuts it into short pieces, which are transcribed a
+ * few at a time and joined in order. Server-only.
+ *
+ * Diarizing models label speakers per piece, so "Speaker A" in one piece isn't
+ * guaranteed to be the same person as "Speaker A" in the next.
  */
-export async function transcribeAudio(input: {
+export async function transcribeMedia(input: {
+  provider: AiProvider;
+  model: string;
+  url: string;
+  fileName: string;
+}): Promise<string> {
+  const { chunks } = await extractAudioChunks(input.url);
+  const baseName = input.fileName.replace(/\.[^.]+$/, "") || "audio";
+
+  const transcripts: string[] = new Array(chunks.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < chunks.length) {
+      const i = next++;
+      transcripts[i] = await transcribeAudio({
+        provider: input.provider,
+        model: input.model,
+        data: chunks[i],
+        fileName: `${baseName}-${i + 1}.mp3`,
+      });
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(TRANSCRIPTION_CONCURRENCY, chunks.length) }, worker));
+
+  const parts = transcripts.filter(Boolean);
+  return /diarize/i.test(input.model) ? parts.join("\n\n") : parts.join(" ");
+}
+
+/**
+ * Speech-to-text for one audio file (max 25 MB): sends it to a transcription
+ * model and returns the transcript. Only OpenAI is wired up. Server-only.
+ */
+async function transcribeAudio(input: {
   provider: AiProvider;
   model: string;
   data: Buffer;
@@ -175,7 +214,7 @@ export async function transcribeAudio(input: {
   }
   if (input.data.byteLength > TRANSCRIPTION_MAX_BYTES) {
     const mb = (input.data.byteLength / 1024 / 1024).toFixed(1);
-    throw new Error(`This file is ${mb} MB; OpenAI transcription accepts at most 25 MB. Upload a shorter or compressed version.`);
+    throw new Error(`An audio chunk is ${mb} MB; OpenAI transcription accepts at most 25 MB.`);
   }
   const client = new OpenAI({ apiKey: input.provider.api_key });
   const file = await toFile(input.data, input.fileName);

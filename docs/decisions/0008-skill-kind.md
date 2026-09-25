@@ -36,8 +36,8 @@ dials on the same kind of call.
   and its transcript is written as speaker turns ("Speaker A: …").
 
 ## Consequences
-- Rules that are provider limits, not preferences, stay in code: the 25 MB
-  transcription cap, which providers support which kind, per-model call options.
+- Rules that are provider limits, not preferences, stay in code: the 25 MB per-request
+  transcription cap (worked around by chunking), which providers support which kind, per-model call options.
 - New kinds (e.g. image generation) mean a new value, a translation in
   `client.ts`, and a form branch — no redesign.
 - The model-name guess remains, but only for suggestions and browsing.
