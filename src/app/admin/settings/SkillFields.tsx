@@ -5,7 +5,7 @@ import type { AiProviderPublic, AiSkill, EnabledModel, SkillKind } from "@/lib/t
 import { SKILL_INSTRUCTIONS_MAX_LENGTH } from "@/lib/types";
 import { Button, Field, Input, Label, Textarea } from "@/components/ui";
 import { tableRowClass } from "@/lib/table";
-import { ConfirmDeleteButton } from "./ConfirmDeleteButton";
+import { ConfirmDeleteButton } from "@/components/ConfirmDeleteButton";
 import { ProviderModelFields } from "./ProviderModelFields";
 import { deleteSkillAction } from "./actions";
 
@@ -57,7 +57,7 @@ export function SkillRows({
             </Button>
             <ConfirmDeleteButton
               action={deleteSkillAction}
-              id={skill.id}
+              fields={{ id: skill.id }}
               confirmMessage={`Delete the skill "${skill.name}"? Fields that use it will need another skill.`}
               className="px-3 py-1 text-xs"
             />

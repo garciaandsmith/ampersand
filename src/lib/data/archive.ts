@@ -83,6 +83,13 @@ export async function deleteArchiveItem(id: string): Promise<void> {
   await removeArchiveFiles(paths);
 }
 
+/** Every storage object every item in a project owns, for cleanup when the whole project is deleted. */
+export async function listProjectFilePaths(projectId: string): Promise<string[]> {
+  const items = await listArchiveItems(projectId);
+  const perItem = await Promise.all(items.map((item) => listItemFilePaths(item)));
+  return [...new Set(perItem.flat())];
+}
+
 /** Every storage object an item owns: the legacy single file plus each file field's upload and thumbnail. */
 async function listItemFilePaths(item: ArchiveItem): Promise<string[]> {
   const paths = new Set<string>();
