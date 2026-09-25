@@ -31,7 +31,8 @@ it.
   (`discardStagedFilesAction`). Deleting a record now removes its file(s) and
   thumbnail.
 - `runFieldGeneration` routes by source and model: audio/video →
-  transcription model (`audio.transcriptions`, OpenAI only, 25 MB limit);
+  transcription model (`audio.transcriptions`, OpenAI only; see below for
+  how large files are handled);
   images/PDFs → chat models (PDFs now work with OpenAI as well as Anthropic);
   a mismatch (e.g. audio with a chat model) is an explicit error. Transcription
   models are recognised by id (`isTranscriptionModel`).
@@ -50,8 +51,21 @@ share one code path.
   storage; there is no sweeper yet.
 - Uploads need `NEXT_PUBLIC_SUPABASE_ANON_KEY` in the browser and are limited
   by the bucket/project upload size limit set in Supabase.
-- Transcription is capped at 25 MB per file (OpenAI's limit); longer media
-  would need server-side audio extraction/chunking.
+- Audio/video is never loaded into memory. The source is passed as a signed
+  URL and `transcribeMedia` (`src/lib/ai/client.ts`) has ffmpeg read it
+  directly, extract the audio as 16 kHz mono mp3 and cut it into 20-minute
+  pieces (`src/lib/media/audio.ts`, ~5 MB each). Pieces are transcribed three at
+  a time and joined in order, which sidesteps OpenAI's 25 MB file limit and the
+  ~23-minute duration limit. A diarizing model labels speakers per piece, so
+  labels aren't guaranteed consistent across pieces.
+- ffmpeg comes from the `ffmpeg-static` npm package (its binary is downloaded
+  on `npm install`, so the platform that builds is the one that runs).
+  `next.config.ts` keeps it external and force-includes it in the archive
+  routes' serverless bundle. It runs inside the server action, so total time is
+  bounded by the page's `maxDuration` (300 s); very long recordings may exceed
+  that and would need a background job.
+- Upload size is limited by the Supabase project's global storage limit
+  (Dashboard → Storage → Settings), not by the app.
 - URL reading covers static HTML only; JavaScript-rendered pages return
   little text.
 - Word/Excel/other document formats are still unsupported as sources.
