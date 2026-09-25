@@ -6,7 +6,8 @@ import {
   getValuesForItems,
 } from "@/lib/data/archive";
 import { listFields } from "@/lib/data/fields";
-import { Button, Card } from "@/components/ui";
+import { Card } from "@/components/ui";
+import { ConfirmDeleteButton } from "@/components/ConfirmDeleteButton";
 import type { StoredFileMeta } from "@/lib/types";
 import { ItemEditor } from "./ItemEditor";
 import { deleteArchiveItemAction } from "./actions";
@@ -61,13 +62,12 @@ export default async function ArchiveItemPage({
             Created {new Date(item.created_at).toLocaleString()}
           </p>
         </div>
-        <form action={deleteArchiveItemAction}>
-          <input type="hidden" name="projectId" value={projectId} />
-          <input type="hidden" name="itemId" value={itemId} />
-          <Button variant="danger" type="submit">
-            Delete record
-          </Button>
-        </form>
+        <ConfirmDeleteButton
+          action={deleteArchiveItemAction}
+          fields={{ projectId, itemId }}
+          confirmMessage={`Delete "${item.title ?? "this record"}"? This permanently removes it and its uploaded files.`}
+          label="Delete record"
+        />
       </div>
 
       {signedUrl ? (

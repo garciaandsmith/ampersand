@@ -3,6 +3,8 @@ import { listProjects } from "@/lib/data/projects";
 import { EmptyState, Table, Th } from "@/components/ui";
 import { tableRowClass } from "@/lib/table";
 import { NewProjectModal } from "@/components/NewProjectModal";
+import { ConfirmDeleteButton } from "@/components/ConfirmDeleteButton";
+import { deleteProjectAction } from "./actions";
 
 export default async function ProjectsPage() {
   const projects = await listProjects();
@@ -27,6 +29,7 @@ export default async function ProjectsPage() {
               <Th>Name</Th>
               <Th>User/s</Th>
               <Th>Date created</Th>
+              <Th />
             </tr>
           </thead>
           <tbody>
@@ -43,6 +46,14 @@ export default async function ProjectsPage() {
                 <td className="px-4 py-3 text-charcoal/70">{project.users || "—"}</td>
                 <td className="px-4 py-3 text-charcoal/70">
                   {new Date(project.created_at).toLocaleDateString()}
+                </td>
+                <td className="px-4 py-3 text-right">
+                  <ConfirmDeleteButton
+                    action={deleteProjectAction}
+                    fields={{ id: project.id }}
+                    confirmMessage={`Delete "${project.name}"? This permanently removes its archive, structure, and uploaded files.`}
+                    className="px-3 py-1 text-xs"
+                  />
                 </td>
               </tr>
             ))}

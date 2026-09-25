@@ -8,13 +8,16 @@ import { Button } from "@/components/ui";
  */
 export function ConfirmDeleteButton({
   action,
-  id,
+  fields,
   confirmMessage,
+  label = "Delete",
   className,
 }: {
   action: (formData: FormData) => void | Promise<void>;
-  id: string;
+  /** Hidden form fields the action needs, e.g. `{ id }` or `{ projectId, itemId }`. */
+  fields: Record<string, string>;
   confirmMessage: string;
+  label?: string;
   className?: string;
 }) {
   return (
@@ -24,9 +27,11 @@ export function ConfirmDeleteButton({
         if (!window.confirm(confirmMessage)) e.preventDefault();
       }}
     >
-      <input type="hidden" name="id" value={id} />
+      {Object.entries(fields).map(([name, value]) => (
+        <input key={name} type="hidden" name={name} value={value} />
+      ))}
       <Button variant="danger" type="submit" className={className}>
-        Delete
+        {label}
       </Button>
     </form>
   );

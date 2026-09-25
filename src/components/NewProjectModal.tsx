@@ -1,9 +1,20 @@
 "use client";
 
 import { useState } from "react";
+import { useFormStatus } from "react-dom";
 import { Plus } from "lucide-react";
 import { createProjectAction } from "@/app/admin/projects/actions";
 import { Button, Field, Input, Label, Modal } from "@/components/ui";
+
+/** Disabled while the create action is in flight, so an unresponsive-feeling click can't fire twice. */
+function CreateProjectButton() {
+  const { pending } = useFormStatus();
+  return (
+    <Button type="submit" className="self-start" disabled={pending}>
+      {pending ? "Creating…" : "Create project"}
+    </Button>
+  );
+}
 
 export function NewProjectModal({
   trigger,
@@ -33,9 +44,7 @@ export function NewProjectModal({
             <Label>Users</Label>
             <Input name="users" placeholder="e.g. maria@agency.com, jon@client.com" />
           </Field>
-          <Button type="submit" className="self-start">
-            Create project
-          </Button>
+          <CreateProjectButton />
         </form>
       </Modal>
     </>

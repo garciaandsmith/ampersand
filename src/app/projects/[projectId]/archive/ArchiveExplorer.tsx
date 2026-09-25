@@ -2,10 +2,39 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Filter, Search, Settings2 } from "lucide-react";
+import { Filter, Search, Settings2, Trash2 } from "lucide-react";
 import type { ArchiveItem, ArchiveItemValue, FormField } from "@/lib/types";
-import { Badge, Button, EmptyState, Input, MultiSelect, Table, Th } from "@/components/ui";
+import { Badge, Button, EmptyState, IconButton, Input, MultiSelect, Table, Th } from "@/components/ui";
 import { tableRowClass } from "@/lib/table";
+import { deleteArchiveItemAction } from "./[itemId]/actions";
+
+/** Trash icon that deletes a record straight from the list, after a confirm. */
+function DeleteItemButton({
+  projectId,
+  itemId,
+  title,
+}: {
+  projectId: string;
+  itemId: string;
+  title: string;
+}) {
+  return (
+    <form
+      action={deleteArchiveItemAction}
+      onSubmit={(e) => {
+        if (!window.confirm(`Delete "${title}"? This permanently removes it and its uploaded files.`)) {
+          e.preventDefault();
+        }
+      }}
+    >
+      <input type="hidden" name="projectId" value={projectId} />
+      <input type="hidden" name="itemId" value={itemId} />
+      <IconButton variant="danger" type="submit" title="Delete record">
+        <Trash2 className="h-4 w-4" />
+      </IconButton>
+    </form>
+  );
+}
 
 const DEFAULT_VISIBLE_COLUMNS = 5;
 const FILTERABLE_TYPES = new Set(["single_select", "multi_select", "tags"]);
@@ -178,6 +207,7 @@ export function ArchiveExplorer({
                 <Th key={c.id}>{c.name}</Th>
               ))}
               <Th>Created</Th>
+              <Th />
             </tr>
           </thead>
           <tbody>
@@ -216,6 +246,13 @@ export function ArchiveExplorer({
                 })}
                 <td className="px-4 py-3 text-charcoal/50">
                   {new Date(item.created_at).toLocaleDateString()}
+                </td>
+                <td className="px-4 py-3 text-right">
+                  <DeleteItemButton
+                    projectId={projectId}
+                    itemId={item.id}
+                    title={item.title ?? "Untitled"}
+                  />
                 </td>
               </tr>
             ))}
