@@ -3,7 +3,61 @@
 import { useState } from "react";
 import { ListChecks, Sparkles } from "lucide-react";
 import type { FormField } from "@/lib/types";
-import { Badge, Button, Card, Field, IconButton, Label, Textarea } from "@/components/ui";
+import { Badge, Button, Card, Field, IconButton, Label, MultiSelect, Select, Textarea } from "@/components/ui";
+
+/** The generated value editor for a field, matching its data type's input widget. */
+function GeneratedValueInput({
+  field,
+  value,
+  onChange,
+  isGenerating,
+  placeholder,
+}: {
+  field: FormField;
+  value: string;
+  onChange: (v: string) => void;
+  isGenerating: boolean;
+  placeholder?: string;
+}) {
+  if (field.data_type === "single_select" && field.options) {
+    return (
+      <Select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={isGenerating ? "animate-pulse" : ""}
+      >
+        <option value="">— select —</option>
+        {field.options.map((o) => (
+          <option key={o} value={o}>
+            {o}
+          </option>
+        ))}
+      </Select>
+    );
+  }
+  if (field.data_type === "multi_select" && field.options) {
+    const selected = value
+      ? value.split(",").map((v) => v.trim()).filter(Boolean)
+      : [];
+    return (
+      <MultiSelect
+        label={selected.length ? selected.join(", ") : "— select —"}
+        options={field.options.map((o) => ({ value: o, label: o }))}
+        value={selected}
+        onChange={(next) => onChange(next.join(", "))}
+      />
+    );
+  }
+  return (
+    <Textarea
+      rows={2}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={isGenerating ? "Generating…" : placeholder}
+      className={isGenerating ? "animate-pulse" : ""}
+    />
+  );
+}
 
 /**
  * The "Generated fields" card shared by the new-record and edit forms.
@@ -157,12 +211,12 @@ export function GeneratedFieldsCard({
                   </>
                 )}
               </div>
-              <Textarea
-                rows={2}
+              <GeneratedValueInput
+                field={f}
                 value={values[f.id] ?? ""}
-                onChange={(e) => onValueChange(f.id, e.target.value)}
-                placeholder={isGenerating ? "Generating…" : placeholder}
-                className={isGenerating ? "animate-pulse" : ""}
+                onChange={(v) => onValueChange(f.id, v)}
+                isGenerating={isGenerating}
+                placeholder={placeholder}
               />
               {errors[f.id] ? <p className="mt-1 text-xs text-coral">{errors[f.id]}</p> : null}
             </Field>

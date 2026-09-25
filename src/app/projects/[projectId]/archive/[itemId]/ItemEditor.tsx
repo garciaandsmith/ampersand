@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import type { FormField } from "@/lib/types";
-import { Button, Card, Field, Input, Label, Textarea } from "@/components/ui";
+import { Button, Card, Field, Input, Label, MultiSelect, Select, Textarea } from "@/components/ui";
 import { updateArchiveItemAction } from "./actions";
 import { generateAutomatedFieldsAction } from "../new/actions";
 import { GeneratedFieldsCard } from "../GeneratedFieldsCard";
@@ -21,18 +21,27 @@ function ValueInput({
   }
   if (field.data_type === "single_select" && field.options) {
     return (
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded border border-charcoal/30 bg-white px-3 py-2 text-sm text-charcoal outline-none focus:border-charcoal"
-      >
+      <Select value={value} onChange={(e) => onChange(e.target.value)}>
         <option value="">— select —</option>
         {field.options.map((o) => (
           <option key={o} value={o}>
             {o}
           </option>
         ))}
-      </select>
+      </Select>
+    );
+  }
+  if (field.data_type === "multi_select" && field.options) {
+    const selected = value
+      ? value.split(",").map((v) => v.trim()).filter(Boolean)
+      : [];
+    return (
+      <MultiSelect
+        label={selected.length ? selected.join(", ") : "— select —"}
+        options={field.options.map((o) => ({ value: o, label: o }))}
+        value={selected}
+        onChange={(next) => onChange(next.join(", "))}
+      />
     );
   }
   return (
