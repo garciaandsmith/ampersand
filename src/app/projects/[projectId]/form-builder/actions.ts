@@ -9,7 +9,7 @@ import {
   updateFieldAutomationSource,
   updateFieldOrder,
 } from "@/lib/data/fields";
-import { isNewDraftId, missingSkillMessage, type DraftFieldInput } from "./draft";
+import { isNewDraftId, missingJsonKeyMessage, missingSkillMessage, type DraftFieldInput } from "./draft";
 
 // Persists the whole form in one go: creates, updates, and deletes are
 // diffed against the current DB state, and the incoming array order
@@ -30,9 +30,17 @@ export async function saveFormAction(
       return { error: "Every field needs a name and a data type" };
     }
   }
-  const missingSkill = draftFields.filter((f) => f.inputType === "automated" && !f.skillId);
+  const missingSkill = draftFields.filter(
+    (f) => f.inputType === "automated" && f.automationKind === "ai" && !f.skillId,
+  );
   if (missingSkill.length > 0) {
     return { error: missingSkillMessage(missingSkill.map((f) => f.name)) };
+  }
+  const missingJsonKey = draftFields.filter(
+    (f) => f.inputType === "automated" && f.automationKind === "json_extract" && !f.automationJsonKey?.trim(),
+  );
+  if (missingJsonKey.length > 0) {
+    return { error: missingJsonKeyMessage(missingJsonKey.map((f) => f.name)) };
   }
 
   const existing = await listFields(projectId);
@@ -64,6 +72,8 @@ export async function saveFormAction(
         automationSourceFieldId: sourceStillPending ? null : resolvedSource,
         automationPrompt: f.automationPrompt,
         skillId: f.inputType === "automated" ? f.skillId : null,
+        automationKind: f.automationKind,
+        automationJsonKey: f.automationJsonKey,
         sortOrder: i,
       });
       idMap.set(f.id, created.id);
@@ -79,6 +89,8 @@ export async function saveFormAction(
         automationSourceFieldId: sourceStillPending ? null : resolvedSource,
         automationPrompt: f.automationPrompt,
         skillId: f.inputType === "automated" ? f.skillId : null,
+        automationKind: f.automationKind,
+        automationJsonKey: f.automationJsonKey,
       });
       await updateFieldOrder(f.id, i);
       if (sourceStillPending) {

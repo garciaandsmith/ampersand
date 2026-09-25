@@ -6,6 +6,7 @@ import { listFields } from "@/lib/data/fields";
 import {
   createArchiveItem,
   getArchiveFileBytes,
+  getArchiveFileSignedUrl,
   getValuesForItems,
   isProjectStoragePath,
   setItemValue,
@@ -41,21 +42,49 @@ async function resolveSourceFile(
   if (!ref) return null;
   if (!isProjectStoragePath(projectId, ref.path)) throw new Error("Invalid file reference.");
 
+  // Audio/video can be hundreds of MB, so it's handed over as a link rather than loaded into memory.
+  if (ref.type.startsWith("audio/") || ref.type.startsWith("video/")) {
+    const url = await getArchiveFileSignedUrl(ref.path);
+    if (!url) throw new Error("The uploaded file could not be read from storage.");
+    return { kind: "media", name: ref.name, url };
+  }
+
   const data = await getArchiveFileBytes(ref.path);
   if (!data) throw new Error("The uploaded file could not be read from storage.");
   return { kind: "file", name: ref.name, mediaType: ref.type, data };
 }
 
+/** Reads `key` out of a source field's JSON content. Arrays are joined with commas; no model call. */
+function extractJsonValue(sourceText: string, key: string): string {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(sourceText);
+  } catch {
+    throw new Error("The source field doesn't contain valid JSON.");
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    throw new Error("The source field's JSON isn't an object.");
+  }
+  const value = (parsed as Record<string, unknown>)[key];
+  if (value === undefined) throw new Error(`Key "${key}" was not found in the JSON.`);
+  if (value === null) return "";
+  if (Array.isArray(value)) return value.map((v) => String(v)).join(", ");
+  if (typeof value === "object") return JSON.stringify(value);
+  return String(value);
+}
+
 /**
  * Generates automated fields. Each field is self-describing: its source
- * (what to read), prompt (what to do), data type + options (the output
- * format) and skill (which provider/model to ask). Problems are reported per
- * field in `errors` rather than written into the value, so a failure can never
- * be saved as if it were content.
+ * (what to read), data type + options (the output format), and either a
+ * prompt + skill (an AI call) or a JSON key (a free, deterministic read out
+ * of the source's content, added for JSON-consolidation fields). Problems
+ * are reported per field in `errors` rather than written into the value, so
+ * a failure can never be saved as if it were content.
  */
 export async function generateAutomatedFieldsAction(input: {
   projectId: string;
-  manualValues: Record<string, string>;
+  /** Every field's current value, manual or already-generated, keyed by field id — a field's source can be either. */
+  knownValues: Record<string, string>;
   /** Files already uploaded in the create flow (before a record exists), keyed by source field id. */
   stagedFiles?: Record<string, StagedFile>;
   /** When editing an existing item, lets file sources be read from its saved files. */
@@ -74,8 +103,6 @@ export async function generateAutomatedFieldsAction(input: {
   await Promise.all(
     automated.map(async (f) => {
       try {
-        const prompt = f.automation_prompt?.trim() ?? "";
-
         let source: GenerationSource | undefined;
         const sourceField = f.automation_source_field_id
           ? fieldsById[f.automation_source_field_id]
@@ -86,7 +113,7 @@ export async function generateAutomatedFieldsAction(input: {
             if (!file) throw new Error(`Upload a file in "${sourceField.name}" first.`);
             source = file;
           } else {
-            const text = (input.manualValues[sourceField.id] ?? "").trim();
+            const text = (input.knownValues[sourceField.id] ?? "").trim();
             if (!text) throw new Error(`"${sourceField.name}" is empty.`);
             // Models can't browse, so a link's page is fetched here and handed over as text.
             const content = sourceField.data_type === "url" ? await fetchPageText(text) : text;
@@ -94,6 +121,16 @@ export async function generateAutomatedFieldsAction(input: {
           }
         }
 
+        if (f.automation_kind === "json_extract") {
+          if (!source) throw new Error("This field needs a source field holding the JSON to read.");
+          if (source.kind !== "text") throw new Error("JSON extraction needs a text source, not a file.");
+          const key = f.automation_json_key?.trim();
+          if (!key) throw new Error("No JSON key is configured for this field.");
+          values[f.id] = extractJsonValue(source.text, key);
+          return;
+        }
+
+        const prompt = f.automation_prompt?.trim() ?? "";
         if (!f.skill_id) throw new Error("No skill is selected for this field.");
         const resolved = await resolveSkill(f.skill_id);
         if (!resolved) {
