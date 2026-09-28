@@ -1,8 +1,36 @@
 export type Project = {
   id: string;
   name: string;
-  users: string | null;
   created_at: string;
+};
+
+/** Per-project role a non-admin user is assigned. Platform admins bypass this — see AGENTS.md's admin model. */
+export type ProjectRole = "editor" | "user";
+
+export const PROJECT_ROLE_LABELS: Record<ProjectRole, string> = {
+  editor: "Editor — full content & form access",
+  user: "User — read-only browse, search & Create",
+};
+
+export type Profile = {
+  id: string;
+  email: string;
+  display_name: string | null;
+  is_admin: boolean;
+  created_at: string;
+};
+
+export type ProjectMember = {
+  project_id: string;
+  user_id: string;
+  role: ProjectRole;
+  created_at: string;
+};
+
+/** A project_members row joined with its user's identity, for the access-management UI. */
+export type ProjectMemberWithProfile = ProjectMember & {
+  email: string;
+  display_name: string | null;
 };
 
 export type AiProviderType = "anthropic" | "openai";

@@ -1,7 +1,8 @@
 # ADR 0003 — No end-user authentication in this prototype
 
 ## Status
-Accepted (provisional — expected to be revisited)
+Superseded by [ADR 0009](0009-supabase-auth-server-side-authorization.md) —
+kept for the historical rationale behind deferring auth in the first place.
 
 ## Context
 AGENTS.md's Phase 1 scope includes authentication, users, roles/permissions,

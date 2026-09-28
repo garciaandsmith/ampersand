@@ -29,3 +29,10 @@ npm run dev
 Connect at least one AI provider (Anthropic and/or OpenAI) and assign it to
 the tasks under **Admin → Settings** before the AI-powered parts of Archive
 and Create will work.
+
+## Auth setup (one-time)
+
+The app is invite-only — see `docs/architecture/overview.md`'s "Access &
+roles" section for the exact dashboard steps (disabling public sign-up,
+allow-listing redirect URLs, and bootstrapping the first admin account,
+which can't be done from inside the app itself).

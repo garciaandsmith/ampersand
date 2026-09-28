@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import type { Project } from "@/lib/types";
 import { NewProjectModal } from "@/components/NewProjectModal";
+import { SignOutButton } from "@/components/SignOutButton";
 
 const COLLAPSE_STORAGE_KEY = "ampersand-sidebar-collapsed";
 
@@ -25,7 +26,17 @@ function subLinkClass(active: boolean) {
   }`;
 }
 
-export function Sidebar({ projects }: { projects: Project[] }) {
+export function Sidebar({
+  projects,
+  isAdmin,
+  userEmail,
+  displayName,
+}: {
+  projects: Project[];
+  isAdmin: boolean;
+  userEmail: string;
+  displayName: string | null;
+}) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
 
@@ -40,7 +51,7 @@ export function Sidebar({ projects }: { projects: Project[] }) {
     window.localStorage.setItem(COLLAPSE_STORAGE_KEY, collapsed ? "1" : "0");
   }, [collapsed]);
 
-  const isAdmin = pathname.startsWith("/admin");
+  const isAdminSection = pathname.startsWith("/admin");
 
   return (
     <aside
@@ -67,21 +78,23 @@ export function Sidebar({ projects }: { projects: Project[] }) {
       </div>
 
       <div className="flex flex-1 flex-col gap-1 overflow-y-auto px-3">
-        <NewProjectModal
-          trigger={(open) => (
-            <button
-              type="button"
-              onClick={open}
-              title="New project"
-              className={`flex items-center gap-2 rounded border border-dashed border-white/25 px-3 py-2 text-sm font-semibold text-paper/70 transition hover:border-yellow hover:text-paper ${
-                collapsed ? "justify-center" : ""
-              }`}
-            >
-              <Plus className="h-4 w-4 shrink-0" />
-              {!collapsed ? "New project" : null}
-            </button>
-          )}
-        />
+        {isAdmin ? (
+          <NewProjectModal
+            trigger={(open) => (
+              <button
+                type="button"
+                onClick={open}
+                title="New project"
+                className={`flex items-center gap-2 rounded border border-dashed border-white/25 px-3 py-2 text-sm font-semibold text-paper/70 transition hover:border-yellow hover:text-paper ${
+                  collapsed ? "justify-center" : ""
+                }`}
+              >
+                <Plus className="h-4 w-4 shrink-0" />
+                {!collapsed ? "New project" : null}
+              </button>
+            )}
+          />
+        ) : null}
 
         {!collapsed ? (
           <div className="mb-1 mt-6 px-1 text-[11px] font-bold uppercase tracking-wide text-paper/40">
@@ -135,20 +148,34 @@ export function Sidebar({ projects }: { projects: Project[] }) {
         </nav>
       </div>
 
-      <div className={`flex items-center gap-2 border-t border-white/10 px-3 py-4 ${collapsed ? "flex-col" : ""}`}>
-        <Link
-          href="/admin/projects"
-          aria-label="Administration"
-          title="Administration"
-          className={`grid h-10 w-10 shrink-0 place-items-center rounded-full border transition ${
-            isAdmin
-              ? "border-yellow bg-yellow/10 text-yellow"
-              : "border-white/20 text-paper/60 hover:border-yellow hover:text-yellow"
-          }`}
-        >
-          <Settings2 className="h-4 w-4" />
-        </Link>
-        {!collapsed ? <span className="text-[11px] text-paper/40">García&amp;Smith · AMPERSAND</span> : null}
+      <div className={`flex flex-col gap-3 border-t border-white/10 px-3 py-4 ${collapsed ? "items-center" : ""}`}>
+        {!collapsed ? (
+          <div className="flex flex-col gap-1 px-1">
+            <span className="truncate text-xs font-semibold text-paper/80">
+              {displayName || userEmail}
+            </span>
+            <SignOutButton className="flex items-center gap-1.5 text-xs font-semibold text-paper/50 transition hover:text-paper" />
+          </div>
+        ) : (
+          <SignOutButton className="flex items-center justify-center text-paper/50 transition hover:text-paper" />
+        )}
+        <div className={`flex items-center gap-2 ${collapsed ? "flex-col" : ""}`}>
+          {isAdmin ? (
+            <Link
+              href="/admin/projects"
+              aria-label="Administration"
+              title="Administration"
+              className={`grid h-10 w-10 shrink-0 place-items-center rounded-full border transition ${
+                isAdminSection
+                  ? "border-yellow bg-yellow/10 text-yellow"
+                  : "border-white/20 text-paper/60 hover:border-yellow hover:text-yellow"
+              }`}
+            >
+              <Settings2 className="h-4 w-4" />
+            </Link>
+          ) : null}
+          {!collapsed ? <span className="text-[11px] text-paper/40">García&amp;Smith · AMPERSAND</span> : null}
+        </div>
       </div>
     </aside>
   );

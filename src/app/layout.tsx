@@ -1,34 +1,26 @@
 import type { Metadata } from "next";
 import { Open_Sans } from "next/font/google";
-import { Sidebar } from "@/components/Sidebar";
-import { listProjects } from "@/lib/data/projects";
 import "./globals.css";
+
+// No data fetching here on purpose: /login must render for signed-out
+// visitors, so the authenticated shell (sidebar, project list) lives in
+// src/app/(app)/layout.tsx instead, behind requireUser().
+export const dynamic = "force-dynamic";
 
 const openSans = Open_Sans({
   variable: "--font-open-sans",
   subsets: ["latin"],
 });
 
-// Every route reads live Supabase data (or redirects based on it); nothing
-// here is safe to prerender statically.
-export const dynamic = "force-dynamic";
-
 export const metadata: Metadata = {
   title: "AMPERSAND",
   description: "AMPERSAND — content generation operative system",
 };
 
-export default async function RootLayout({ children }: LayoutProps<"/">) {
-  const projects = await listProjects();
-
+export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={`${openSans.variable} h-full antialiased`}>
-      <body className="min-h-full bg-paper text-charcoal">
-        <div className="flex min-h-screen w-full">
-          <Sidebar projects={projects} />
-          {children}
-        </div>
-      </body>
+      <body className="min-h-full bg-paper text-charcoal">{children}</body>
     </html>
   );
 }
