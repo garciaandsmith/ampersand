@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Filter, Search, Settings2, Trash2 } from "lucide-react";
+import { Filter, Search, Settings2, Smartphone, Trash2 } from "lucide-react";
 import type { ArchiveItem, ArchiveItemValue, FormField } from "@/lib/types";
 import { Badge, Button, EmptyState, IconButton, Input, MultiSelect, Table, Th } from "@/components/ui";
 import { tableRowClass } from "@/lib/table";
@@ -151,13 +151,22 @@ export function ArchiveExplorer({
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-4">
         {canEdit ? (
-          <Link
-            href={`/projects/${projectId}/form-builder`}
-            className="flex items-center gap-1.5 font-sans text-sm font-extrabold text-charcoal underline decoration-yellow decoration-2 underline-offset-4 hover:text-charcoal/70"
-          >
-            <Settings2 className="h-4 w-4" />
-            This project&rsquo;s structure lives in the Form Builder →
-          </Link>
+          <div className="flex items-center gap-4">
+            <Link
+              href={`/projects/${projectId}/form-builder`}
+              className="flex items-center gap-1.5 font-sans text-sm font-extrabold text-charcoal underline decoration-yellow decoration-2 underline-offset-4 hover:text-charcoal/70"
+            >
+              <Settings2 className="h-4 w-4" />
+              This project&rsquo;s structure lives in the Form Builder →
+            </Link>
+            <Link
+              href={`/projects/${projectId}/form-views`}
+              className="flex items-center gap-1.5 font-sans text-sm font-extrabold text-charcoal underline decoration-yellow decoration-2 underline-offset-4 hover:text-charcoal/70"
+            >
+              <Smartphone className="h-4 w-4" />
+              Form Views
+            </Link>
+          </div>
         ) : (
           <span />
         )}

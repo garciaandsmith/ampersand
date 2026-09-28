@@ -2,56 +2,11 @@
 
 import { useMemo, useState, useTransition } from "react";
 import type { FormField } from "@/lib/types";
-import { Button, Card, Field, Input, Label, MultiSelect, Select, Textarea } from "@/components/ui";
+import { Button, Card, Field, Input, Label } from "@/components/ui";
+import { FieldValueInput } from "@/components/FieldValueInput";
 import { updateArchiveItemAction } from "./actions";
 import { generateAutomatedFieldsAction } from "../new/actions";
 import { GeneratedFieldsCard } from "../GeneratedFieldsCard";
-
-function ValueInput({
-  field,
-  value,
-  onChange,
-}: {
-  field: FormField;
-  value: string;
-  onChange: (v: string) => void;
-}) {
-  if (field.data_type === "long_text") {
-    return <Textarea rows={4} value={value} onChange={(e) => onChange(e.target.value)} />;
-  }
-  if (field.data_type === "single_select" && field.options) {
-    return (
-      <Select value={value} onChange={(e) => onChange(e.target.value)}>
-        <option value="">— select —</option>
-        {field.options.map((o) => (
-          <option key={o} value={o}>
-            {o}
-          </option>
-        ))}
-      </Select>
-    );
-  }
-  if (field.data_type === "multi_select" && field.options) {
-    const selected = value
-      ? value.split(",").map((v) => v.trim()).filter(Boolean)
-      : [];
-    return (
-      <MultiSelect
-        label={selected.length ? selected.join(", ") : "— select —"}
-        options={field.options.map((o) => ({ value: o, label: o }))}
-        value={selected}
-        onChange={(next) => onChange(next.join(", "))}
-      />
-    );
-  }
-  return (
-    <Input
-      type={field.data_type === "date" ? "date" : field.data_type === "number" ? "number" : "text"}
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-    />
-  );
-}
 
 export function ItemEditor({
   projectId,
@@ -157,7 +112,7 @@ export function ItemEditor({
         {editableManualFields.map((f) => (
           <Field key={f.id}>
             <Label>{f.name}</Label>
-            <ValueInput
+            <FieldValueInput
               field={f}
               value={values[f.id] ?? ""}
               onChange={(v) => setValue(f.id, v)}
