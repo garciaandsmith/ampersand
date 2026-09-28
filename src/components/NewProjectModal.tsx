@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useFormStatus } from "react-dom";
 import { Plus } from "lucide-react";
-import { createProjectAction } from "@/app/admin/projects/actions";
+import { createProjectAction } from "@/app/(app)/admin/projects/actions";
 import { Button, Field, Input, Label, Modal } from "@/components/ui";
 
 /** Disabled while the create action is in flight, so an unresponsive-feeling click can't fire twice. */
@@ -40,10 +40,9 @@ export function NewProjectModal({
             <Label>Name</Label>
             <Input name="name" placeholder="Client / project name" required autoFocus />
           </Field>
-          <Field>
-            <Label>Users</Label>
-            <Input name="users" placeholder="e.g. maria@agency.com, jon@client.com" />
-          </Field>
+          <p className="-mt-1 mb-2 text-xs text-charcoal/50">
+            Assign users from Admin → Users once the project is created.
+          </p>
           <CreateProjectButton />
         </form>
       </Modal>

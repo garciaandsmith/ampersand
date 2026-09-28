@@ -1,12 +1,30 @@
 import "server-only";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { listProjectFilePaths, removeArchiveFiles } from "@/lib/data/archive";
+import { listUserProjectIds } from "@/lib/data/users";
 import type { Project } from "@/lib/types";
 
 export async function listProjects(): Promise<Project[]> {
   const { data, error } = await supabaseAdmin()
     .from("projects")
     .select("*")
+    .order("created_at", { ascending: false });
+
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+/** All projects for an admin; only the ones a non-admin is assigned to otherwise. Drives the sidebar and root redirect. */
+export async function listProjectsForUser(userId: string, isAdmin: boolean): Promise<Project[]> {
+  if (isAdmin) return listProjects();
+
+  const projectIds = await listUserProjectIds(userId);
+  if (projectIds.length === 0) return [];
+
+  const { data, error } = await supabaseAdmin()
+    .from("projects")
+    .select("*")
+    .in("id", projectIds)
     .order("created_at", { ascending: false });
 
   if (error) throw new Error(error.message);
@@ -24,13 +42,10 @@ export async function getProject(id: string): Promise<Project | null> {
   return data;
 }
 
-export async function createProject(input: {
-  name: string;
-  users?: string | null;
-}): Promise<Project> {
+export async function createProject(input: { name: string }): Promise<Project> {
   const { data, error } = await supabaseAdmin()
     .from("projects")
-    .insert({ name: input.name, users: input.users ?? null })
+    .insert({ name: input.name })
     .select("*")
     .single();
 

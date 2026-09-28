@@ -16,32 +16,47 @@ behind each choice referenced here.
 - **AI**: Anthropic and OpenAI SDKs behind one provider-agnostic interface,
   configured at runtime from the Admin UI. See
   [ADR 0004](../decisions/0004-pluggable-ai-providers.md).
-- **Auth**: none yet. See
-  [ADR 0003](../decisions/0003-no-auth-in-prototype.md) — **do not deploy
-  this publicly without adding auth first.**
+- **Auth**: Supabase Auth, invite-only (no public sign-up). Roles are
+  Admin / Editor / User, enforced server-side rather than via RLS — see
+  [ADR 0009](../decisions/0009-supabase-auth-server-side-authorization.md).
 
 ## Directory map
 
 ```
 src/
   app/
-    admin/                     Admin shell: Projects, Settings
-      projects/                Project list + create
-      settings/                AI Providers + Task assignments
-    projects/[projectId]/      Project shell: Archive, Form Builder, Create
-      archive/                 Record table, detail/edit, new-record flow
-      form-builder/            Per-project field schema editor
-      create/                  RAG-grounded chat
-  components/                  Shared UI (Shell, NavLinks, ui.tsx primitives)
+    (app)/                     Route group for everything behind requireUser()
+      layout.tsx               Sidebar + project list filtered to this user
+      admin/                   Admin shell: Projects, Users, Settings (requireAdminPage)
+        projects/              Project list + create; [projectId]/access = member management
+        users/                 Invite, promote/demote admin, remove
+        settings/              AI Providers + Task assignments
+      projects/[projectId]/    Project shell: Archive, Form Builder, Create
+        archive/                 Record table, detail/edit, new-record flow
+        form-builder/            Per-project field schema editor
+        create/                  RAG-grounded chat (open to every project role)
+    login/                     Sign-in (password or magic link, visitor's choice)
+    auth/
+      confirm/route.ts         Verifies invite/magic-link/recovery email links
+      set-password/            Where invite & recovery links land
+  components/                  Shared UI (Shell, Sidebar, ui.tsx primitives)
   lib/
-    supabase/server.ts         Service-role Supabase client (server-only)
+    supabase/
+      server.ts                Service-role Supabase client (server-only, table access)
+      authServer.ts            Anon-key + session cookie client (auth only)
+      authBrowser.ts            Anon-key browser client (Client Components, auth only)
+    auth/
+      session.ts               getCurrentUser + all requireX authorization guards
+      actions.ts                signOutAction
     data/                      Typed CRUD per entity (projects, providers,
-                                fields, archive, chat)
+                                fields, archive, chat, users/profiles/project_members)
     ai/
       client.ts                Vendor-agnostic generateText() (Anthropic/OpenAI)
       tasks.ts                 Product-level AI operations (field automation,
                                 visual recognition, chat answering)
+    site-url.ts                Request-derived origin for email-link redirects
     types.ts                   Shared domain types
+  middleware.ts                Refreshes the Supabase session cookie every request
 supabase/migrations/           Hand-applied SQL (no migration runner yet —
                                 see "Database" below)
 ```
@@ -50,8 +65,11 @@ supabase/migrations/           Hand-applied SQL (no migration runner yet —
 
 All tables live in the `ampersand` Postgres schema:
 
-- **`projects`** — one row per client/project. `users` is currently
-  free-text (no real user system — see ADR 0003).
+- **`projects`** — one row per client/project.
+- **`profiles`** — mirrors `auth.users` 1:1 (created by a DB trigger the
+  moment an admin invites someone). `is_admin` grants full platform access.
+- **`project_members`** — `(project_id, user_id, role)`, `role` being
+  `editor` or `user`. Admins don't need a row here.
 - **`ai_providers`** — named connections (`type`: anthropic | openai,
   `api_key`) entered via Admin → Settings.
 - **`ai_task_assignments`** — maps a fixed task key
@@ -151,9 +169,32 @@ form-builder feature) and has its own single setting instead:
    being persisted — nothing is written to the database directly from an AI
    response (per AGENTS.md: "AI output is not automatically truth").
 
+## Access & roles
+
+Invite-only; see [ADR 0009](../decisions/0009-supabase-auth-server-side-authorization.md)
+for the full model. One-time setup, in order:
+
+1. **Supabase dashboard** (Authentication → Sign In / Providers): disable
+   "Allow new users to sign up" — the only account-creation path is an
+   admin's invite. Authentication → URL Configuration: set Site URL and add
+   every origin this app runs on to Additional Redirect URLs — at minimum
+   `http://localhost:3000/**`, the Vercel production URL's `/**`, and a
+   preview wildcard (e.g. `https://*.vercel.app/**`).
+2. **Bootstrap the first admin** (there is no way to do this from inside the
+   app — inviting requires an admin to already exist): in the Supabase
+   dashboard, Authentication → Users → Add user → invite, using your own
+   email. Once the row exists, run
+   `update ampersand.profiles set is_admin = true where email = '...';`
+   in the SQL Editor. Every subsequent user is invited normally from
+   Admin → Users.
+3. From then on: Admin → Users to invite people and grant/revoke admin;
+   Admin → Projects → "Manage access" to assign Editor/User roles per
+   project.
+
 ## Known simplifications (see ADRs for the "why")
 
 - Create's retrieval is Postgres full-text search, not embeddings
   ([ADR 0005](../decisions/0005-keyword-search-not-embeddings.md)).
-- No end-user auth ([ADR 0003](../decisions/0003-no-auth-in-prototype.md)).
+- Authorization is enforced in server code, not Postgres RLS for
+  `authenticated` ([ADR 0009](../decisions/0009-supabase-auth-server-side-authorization.md)).
 - No automated migration runner (manual SQL Editor application).
