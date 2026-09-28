@@ -2,70 +2,11 @@
 
 import { useMemo, useState, useTransition } from "react";
 import type { FormField } from "@/lib/types";
-import { Button, Card, Field, Input, Label, MultiSelect, Select, Textarea } from "@/components/ui";
+import { Button, Card, Field, Input, Label } from "@/components/ui";
+import { FieldValueInput } from "@/components/FieldValueInput";
 import { createArchiveItemAction, generateAutomatedFieldsAction, type StagedFile } from "./actions";
 import { FileUploadField } from "../FileUploadField";
 import { GeneratedFieldsCard } from "../GeneratedFieldsCard";
-
-function ManualInput({
-  field,
-  value,
-  onChange,
-}: {
-  field: FormField;
-  value: string;
-  onChange: (v: string) => void;
-}) {
-  if (field.data_type === "long_text") {
-    return (
-      <Textarea
-        rows={4}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={`Describe ${field.name.toLowerCase()}…`}
-      />
-    );
-  }
-  if (field.data_type === "single_select" && field.options) {
-    return (
-      <Select value={value} onChange={(e) => onChange(e.target.value)}>
-        <option value="">— select —</option>
-        {field.options.map((o) => (
-          <option key={o} value={o}>
-            {o}
-          </option>
-        ))}
-      </Select>
-    );
-  }
-  if (field.data_type === "multi_select" && field.options) {
-    const selected = value
-      ? value.split(",").map((v) => v.trim()).filter(Boolean)
-      : [];
-    return (
-      <MultiSelect
-        label={selected.length ? selected.join(", ") : "— select —"}
-        options={field.options.map((o) => ({ value: o, label: o }))}
-        value={selected}
-        onChange={(next) => onChange(next.join(", "))}
-      />
-    );
-  }
-  return (
-    <Input
-      type={field.data_type === "date" ? "date" : field.data_type === "number" ? "number" : "text"}
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder={
-        field.data_type === "tags"
-          ? "comma, separated, tags"
-          : field.data_type === "url"
-            ? "https://…"
-            : undefined
-      }
-    />
-  );
-}
 
 export function NewArchiveItemForm({
   projectId,
@@ -182,7 +123,7 @@ export function NewArchiveItemForm({
               />
             ) : (
               <div className="rounded border border-coral/40 p-0.5">
-                <ManualInput
+                <FieldValueInput
                   field={f}
                   value={manualValues[f.id] ?? ""}
                   onChange={(v) => setManualValues((prev) => ({ ...prev, [f.id]: v }))}

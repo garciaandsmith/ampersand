@@ -159,6 +159,17 @@ export type FormField = {
   created_at: string;
 };
 
+/** A saved, mobile-first subset of a project's manual fields (see form_view_fields for which ones, and in what order). Filling one out creates a new ArchiveItem scoped to just those fields. */
+export type FormView = {
+  id: string;
+  project_id: string;
+  name: string;
+  description: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type ArchiveItem = {
   id: string;
   project_id: string;

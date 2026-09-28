@@ -31,9 +31,10 @@ src/
         projects/              Project list + create; [projectId]/access = member management
         users/                 Invite, promote/demote admin, remove
         settings/              AI Providers + Task assignments
-      projects/[projectId]/    Project shell: Archive, Form Builder, Create
+      projects/[projectId]/    Project shell: Archive, Form Builder, Form Views, Create
         archive/                 Record table, detail/edit, new-record flow
         form-builder/            Per-project field schema editor
+        form-views/              Editor-only, mobile-first subset-of-fields templates
         create/                  RAG-grounded chat (open to every project role)
     login/                     Sign-in (password or magic link, visitor's choice)
     auth/
@@ -49,7 +50,7 @@ src/
       session.ts               getCurrentUser + all requireX authorization guards
       actions.ts                signOutAction
     data/                      Typed CRUD per entity (projects, providers,
-                                fields, archive, chat, users/profiles/project_members)
+                                fields, archive, formViews, chat, users/profiles/project_members)
     ai/
       client.ts                Vendor-agnostic generateText() (Anthropic/OpenAI)
       tasks.ts                 Product-level AI operations (field automation,
@@ -89,6 +90,11 @@ All tables live in the `ampersand` Postgres schema:
   `tsvector` index for the Create chat's retrieval.
 - **`chat_messages`** — Create's conversation history per project, including
   the source snippets an assistant answer was grounded in.
+- **`form_views`** — an editor-defined, named subset of a project's manual
+  fields, for quick mobile input. `form_view_fields` holds which fields and
+  in what order; `form_view_submissions` logs which archive item each fill
+  created, and by whom. Filling one out always creates a **new** archive
+  item (never edits an existing one) — see "Form Views" below.
 
 ## Database migrations
 
@@ -154,6 +160,27 @@ Picking a file uploads it straight from the browser to the `archive` bucket
 JPEG thumbnail for images and videos, so skills can read it before the record
 is saved and previews show immediately. See
 [ADR 0007](../decisions/0007-direct-to-storage-uploads.md).
+
+## Form Views
+
+A Form View (`src/lib/data/formViews.ts`,
+`src/app/projects/[projectId]/form-views/`) is a saved, named subset of a
+project's **manual** fields (automated fields can't be hand-filled, so
+they're never offered), in a chosen order, rendered as a single mobile-first
+scrolling page instead of the full Form Builder layout. It's an alternate
+*creation* flow, not an edit surface: saving always calls `createArchiveItem`
+with an auto-generated title (`"{view name} — {timestamp}"`) and only sets
+values for the fields on that view — exactly like "New archive record",
+just narrowed and reusable. An editor completes the rest later from the
+normal item editor. Gated at editor+ throughout (both managing and filling
+Form Views), so this adds no new permission surface — see
+[Access & roles](#access--roles) below.
+
+Free-text fields (`text`, `long_text`) get an optional dictation button
+(`src/components/FieldValueInput.tsx`, shared with the main create/edit
+forms) built on the browser's native Web Speech API — no server call, no
+dependency, and it silently doesn't render where unsupported (notably
+Firefox).
 
 ## AI task flow
 
