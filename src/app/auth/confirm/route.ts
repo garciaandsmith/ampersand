@@ -3,6 +3,12 @@ import { type NextRequest } from "next/server";
 import { redirect } from "next/navigation";
 import { supabaseAuthServer } from "@/lib/supabase/authServer";
 
+/** Only a same-origin relative path is a safe redirect target — anything else (an absolute URL, or "//host" which browsers treat as protocol-relative) could send a verified visitor off-site. */
+function safeNext(next: string | null): string {
+  if (!next || !next.startsWith("/") || next.startsWith("//")) return "/";
+  return next;
+}
+
 /**
  * Where every Supabase email link lands (invite, magic link, password
  * recovery) — the `emailRedirectTo` / `redirectTo` this app always passes.
@@ -13,7 +19,7 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const token_hash = searchParams.get("token_hash");
   const type = searchParams.get("type") as EmailOtpType | null;
-  const next = searchParams.get("next") ?? "/";
+  const next = safeNext(searchParams.get("next"));
 
   if (token_hash && type) {
     const supabase = await supabaseAuthServer();

@@ -1,3 +1,4 @@
+import { requireProjectAccessPage } from "@/lib/auth/session";
 import { listFields } from "@/lib/data/fields";
 import { NewArchiveItemForm } from "./NewArchiveItemForm";
 
@@ -10,6 +11,8 @@ export default async function NewArchiveItemPage({
   params: Promise<{ projectId: string }>;
 }) {
   const { projectId } = await params;
+  // Creating a record is an editor-level action; read-only Users never see this page.
+  await requireProjectAccessPage(projectId, "editor");
   const fields = await listFields(projectId);
   const manualFields = fields.filter((f) => f.input_type === "manual");
   const automatedFields = fields.filter((f) => f.input_type === "automated");

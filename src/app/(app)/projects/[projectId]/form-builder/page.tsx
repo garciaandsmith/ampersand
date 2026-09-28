@@ -1,3 +1,4 @@
+import { requireProjectAccessPage } from "@/lib/auth/session";
 import { listFields } from "@/lib/data/fields";
 import { listSkills } from "@/lib/data/providers";
 import { FormBuilderList } from "./FormBuilderList";
@@ -8,6 +9,8 @@ export default async function FormBuilderPage({
   params: Promise<{ projectId: string }>;
 }) {
   const { projectId } = await params;
+  // Editing the field schema is an editor-level action; read-only Users never see this page.
+  await requireProjectAccessPage(projectId, "editor");
   const [fields, skills] = await Promise.all([listFields(projectId), listSkills()]);
 
   return (

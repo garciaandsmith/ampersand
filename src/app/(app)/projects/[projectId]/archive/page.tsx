@@ -1,3 +1,4 @@
+import { requireProjectAccessPage } from "@/lib/auth/session";
 import { listFields } from "@/lib/data/fields";
 import { getValuesForItems, listArchiveItems } from "@/lib/data/archive";
 import { ArchiveExplorer } from "./ArchiveExplorer";
@@ -8,6 +9,7 @@ export default async function ArchivePage({
   params: Promise<{ projectId: string }>;
 }) {
   const { projectId } = await params;
+  const { role } = await requireProjectAccessPage(projectId);
 
   const [fields, items] = await Promise.all([
     listFields(projectId),
@@ -21,6 +23,7 @@ export default async function ArchivePage({
       fields={fields}
       items={items}
       valuesByItem={valuesByItem}
+      canEdit={role === "editor" || role === "admin"}
     />
   );
 }

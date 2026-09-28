@@ -1,5 +1,6 @@
 "use server";
 
+import { requireProjectRoleAction } from "@/lib/auth/session";
 import {
   createUploadTargets,
   isProjectStoragePath,
@@ -18,11 +19,14 @@ export async function createUploadTargetsAction(input: {
   withThumbnail: boolean;
 }) {
   if (!input.projectId) throw new Error("Missing project id");
+  await requireProjectRoleAction(input.projectId, "editor");
   return createUploadTargets(input.projectId, input.fileName, input.withThumbnail);
 }
 
 /** Deletes files that were uploaded but never attached to a saved record (replaced or removed by the user). */
 export async function discardStagedFilesAction(input: { projectId: string; paths: string[] }) {
+  if (!input.projectId) throw new Error("Missing project id");
+  await requireProjectRoleAction(input.projectId, "editor");
   const paths = input.paths.filter((p) => isProjectStoragePath(input.projectId, p));
   await removeArchiveFiles(paths);
 }

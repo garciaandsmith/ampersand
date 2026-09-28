@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import Image from "next/image";
+import { requireProjectAccessPage } from "@/lib/auth/session";
 import {
   getArchiveFileSignedUrl,
   getArchiveItem,
@@ -10,6 +11,7 @@ import { Card } from "@/components/ui";
 import { ConfirmDeleteButton } from "@/components/ConfirmDeleteButton";
 import type { StoredFileMeta } from "@/lib/types";
 import { ItemEditor } from "./ItemEditor";
+import { ArchiveItemView } from "./ArchiveItemView";
 import { deleteArchiveItemAction } from "./actions";
 
 // Server actions on this page run AI calls (e.g. transcription) that can outlast the platform's default timeout.
@@ -21,6 +23,8 @@ export default async function ArchiveItemPage({
   params: Promise<{ projectId: string; itemId: string }>;
 }) {
   const { projectId, itemId } = await params;
+  const { role } = await requireProjectAccessPage(projectId);
+  const canEdit = role === "editor" || role === "admin";
 
   const [item, fields] = await Promise.all([
     getArchiveItem(itemId),
@@ -62,12 +66,14 @@ export default async function ArchiveItemPage({
             Created {new Date(item.created_at).toLocaleString()}
           </p>
         </div>
-        <ConfirmDeleteButton
-          action={deleteArchiveItemAction}
-          fields={{ projectId, itemId }}
-          confirmMessage={`Delete "${item.title ?? "this record"}"? This permanently removes it and its uploaded files.`}
-          label="Delete record"
-        />
+        {canEdit ? (
+          <ConfirmDeleteButton
+            action={deleteArchiveItemAction}
+            fields={{ projectId, itemId }}
+            confirmMessage={`Delete "${item.title ?? "this record"}"? This permanently removes it and its uploaded files.`}
+            label="Delete record"
+          />
+        ) : null}
       </div>
 
       {signedUrl ? (
@@ -103,14 +109,23 @@ export default async function ArchiveItemPage({
         </Card>
       ) : null}
 
-      <ItemEditor
-        projectId={projectId}
-        itemId={itemId}
-        manualFields={manualFields}
-        automatedFields={automatedFields}
-        initialValues={initialValues}
-        initialTitle={item.title ?? ""}
-      />
+      {canEdit ? (
+        <ItemEditor
+          projectId={projectId}
+          itemId={itemId}
+          manualFields={manualFields}
+          automatedFields={automatedFields}
+          initialValues={initialValues}
+          initialTitle={item.title ?? ""}
+        />
+      ) : (
+        <ArchiveItemView
+          manualFields={manualFields}
+          automatedFields={automatedFields}
+          values={initialValues}
+          title={item.title ?? ""}
+        />
+      )}
     </div>
   );
 }

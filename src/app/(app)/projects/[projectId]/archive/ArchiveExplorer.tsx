@@ -48,11 +48,14 @@ export function ArchiveExplorer({
   fields,
   items,
   valuesByItem,
+  canEdit,
 }: {
   projectId: string;
   fields: FormField[];
   items: ArchiveItem[];
   valuesByItem: Record<string, ArchiveItemValue[]>;
+  /** Editors/admins get content-management affordances; read-only Users get browse/search/view only. */
+  canEdit: boolean;
 }) {
   const columns = useMemo(() => fields.filter((f) => f.data_type !== "file"), [fields]);
   const filterableFields = useMemo(
@@ -122,16 +125,22 @@ export function ArchiveExplorer({
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-4">
-        <Link
-          href={`/projects/${projectId}/form-builder`}
-          className="flex items-center gap-1.5 font-sans text-sm font-extrabold text-charcoal underline decoration-yellow decoration-2 underline-offset-4 hover:text-charcoal/70"
-        >
-          <Settings2 className="h-4 w-4" />
-          This project&rsquo;s structure lives in the Form Builder →
-        </Link>
-        <Link href={`/projects/${projectId}/archive/new`}>
-          <Button>+ New</Button>
-        </Link>
+        {canEdit ? (
+          <Link
+            href={`/projects/${projectId}/form-builder`}
+            className="flex items-center gap-1.5 font-sans text-sm font-extrabold text-charcoal underline decoration-yellow decoration-2 underline-offset-4 hover:text-charcoal/70"
+          >
+            <Settings2 className="h-4 w-4" />
+            This project&rsquo;s structure lives in the Form Builder →
+          </Link>
+        ) : (
+          <span />
+        )}
+        {canEdit ? (
+          <Link href={`/projects/${projectId}/archive/new`}>
+            <Button>+ New</Button>
+          </Link>
+        ) : null}
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -191,7 +200,7 @@ export function ArchiveExplorer({
               : "Try a different search term or filter."
           }
           action={
-            items.length === 0 ? (
+            items.length === 0 && canEdit ? (
               <Link href={`/projects/${projectId}/archive/new`}>
                 <Button>+ New record</Button>
               </Link>
@@ -207,7 +216,7 @@ export function ArchiveExplorer({
                 <Th key={c.id}>{c.name}</Th>
               ))}
               <Th>Created</Th>
-              <Th />
+              {canEdit ? <Th /> : null}
             </tr>
           </thead>
           <tbody>
@@ -247,13 +256,15 @@ export function ArchiveExplorer({
                 <td className="px-4 py-3 text-charcoal/50">
                   {new Date(item.created_at).toLocaleDateString()}
                 </td>
-                <td className="px-4 py-3 text-right">
-                  <DeleteItemButton
-                    projectId={projectId}
-                    itemId={item.id}
-                    title={item.title ?? "Untitled"}
-                  />
-                </td>
+                {canEdit ? (
+                  <td className="px-4 py-3 text-right">
+                    <DeleteItemButton
+                      projectId={projectId}
+                      itemId={item.id}
+                      title={item.title ?? "Untitled"}
+                    />
+                  </td>
+                ) : null}
               </tr>
             ))}
           </tbody>
