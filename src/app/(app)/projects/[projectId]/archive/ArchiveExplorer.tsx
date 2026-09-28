@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Filter, Search, Settings2, Trash2 } from "lucide-react";
 import type { ArchiveItem, ArchiveItemValue, FormField } from "@/lib/types";
@@ -63,12 +63,37 @@ export function ArchiveExplorer({
     [columns],
   );
 
+  const columnsStorageKey = `ampersand-archive-columns:${projectId}`;
+
   const [search, setSearch] = useState("");
   const [visibleColumnIds, setVisibleColumnIds] = useState<string[]>(() =>
     columns.slice(0, DEFAULT_VISIBLE_COLUMNS).map((c) => c.id),
   );
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [filterValues, setFilterValues] = useState<Record<string, string[]>>({});
+
+  useEffect(() => {
+    // Read after mount (not in the initial state) so server and client agree on
+    // the first render; localStorage isn't available during SSR.
+    const stored = window.localStorage.getItem(columnsStorageKey);
+    if (!stored) return;
+    try {
+      const parsed = JSON.parse(stored) as string[];
+      const validIds = new Set(columns.map((c) => c.id));
+      const restored = parsed.filter((id) => validIds.has(id));
+      if (restored.length > 0) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setVisibleColumnIds(restored);
+      }
+    } catch {
+      // ignore malformed stored value
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [columnsStorageKey]);
+
+  useEffect(() => {
+    window.localStorage.setItem(columnsStorageKey, JSON.stringify(visibleColumnIds));
+  }, [columnsStorageKey, visibleColumnIds]);
 
   const filterOptions = useMemo(() => {
     const options: Record<string, { value: string; label: string }[]> = {};
