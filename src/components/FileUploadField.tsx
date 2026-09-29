@@ -4,9 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import { FileText, Loader2, Music, Play, X } from "lucide-react";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import { makeThumbnail } from "@/lib/media/thumbnail";
+import type { StagedFile } from "@/lib/types";
 import { Button } from "@/components/ui";
-import { createUploadTargetsAction, discardStagedFilesAction } from "./upload-actions";
-import type { StagedFile } from "./new/actions";
+import { createUploadTargetsAction, discardStagedFilesAction } from "@/lib/actions/uploads";
 
 function formatSize(bytes: number) {
   return bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;

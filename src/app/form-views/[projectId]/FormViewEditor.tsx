@@ -148,7 +148,7 @@ export function FormViewEditor({
         <Button onClick={handleSave} disabled={isSaving}>
           {isSaving ? "Saving…" : "Save Form View"}
         </Button>
-        <Link href={`/projects/${projectId}/form-views`} className="text-sm text-charcoal/60 underline">
+        <Link href={`/form-views/${projectId}`} className="text-sm text-charcoal/60 underline">
           Cancel
         </Link>
       </div>

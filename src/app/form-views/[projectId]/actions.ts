@@ -34,8 +34,8 @@ export async function saveFormViewAction(input: {
     });
   }
 
-  revalidatePath(`/projects/${input.projectId}/form-views`);
-  redirect(`/projects/${input.projectId}/form-views`);
+  revalidatePath(`/form-views/${input.projectId}`);
+  redirect(`/form-views/${input.projectId}`);
 }
 
 export async function deleteFormViewAction(formData: FormData) {
@@ -44,5 +44,5 @@ export async function deleteFormViewAction(formData: FormData) {
   if (!projectId || !formViewId) throw new Error("Missing form view id");
   await requireProjectRoleAction(projectId, "editor");
   await deleteFormView(formViewId);
-  revalidatePath(`/projects/${projectId}/form-views`);
+  revalidatePath(`/form-views/${projectId}`);
 }

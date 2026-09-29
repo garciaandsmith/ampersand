@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireProjectRoleAction } from "@/lib/auth/session";
 import { createArchiveItem, isProjectStoragePath, setItemValue } from "@/lib/data/archive";
 import { getFormViewWithFields, recordFormViewSubmission } from "@/lib/data/formViews";
-import type { StagedFile } from "../../../archive/new/actions";
+import type { StagedFile } from "@/lib/types";
 
 export type { StagedFile };
 

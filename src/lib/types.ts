@@ -192,6 +192,9 @@ export type StoredFileMeta = {
   thumbPath?: string | null;
 };
 
+/** A file already sitting in storage, uploaded by the browser but not yet attached to a saved record. */
+export type StagedFile = { path: string; name: string; type: string; thumbPath: string | null };
+
 export type ArchiveItemValue = {
   id: string;
   item_id: string;

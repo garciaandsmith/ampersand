@@ -5,7 +5,7 @@ import Link from "next/link";
 import type { FormField, FormView } from "@/lib/types";
 import { Button, Field, Label } from "@/components/ui";
 import { FieldValueInput } from "@/components/FieldValueInput";
-import { FileUploadField } from "../../../archive/FileUploadField";
+import { FileUploadField } from "@/components/FileUploadField";
 import { submitFormViewAction, type StagedFile } from "./actions";
 
 export function FormViewFillForm({
@@ -49,7 +49,7 @@ export function FormViewFillForm({
 
   if (savedItemId) {
     return (
-      <div className="mx-auto flex max-w-md flex-col items-center gap-4 px-4 py-16 text-center">
+      <div className="mx-auto flex max-w-md flex-col items-center gap-4 py-16 text-center">
         <p className="font-sans text-lg font-extrabold text-charcoal">Saved.</p>
         <p className="text-sm text-charcoal/60">
           Added to the archive as a new record. Fill it out again, or open it to keep going.
@@ -60,7 +60,7 @@ export function FormViewFillForm({
             <Button variant="secondary">Open record</Button>
           </Link>
         </div>
-        <Link href={`/projects/${projectId}/form-views`} className="text-xs text-charcoal/50 underline">
+        <Link href={`/form-views/${projectId}`} className="text-xs text-charcoal/50 underline">
           Back to Form Views
         </Link>
       </div>
@@ -68,9 +68,9 @@ export function FormViewFillForm({
   }
 
   return (
-    <div className="mx-auto flex max-w-md flex-col gap-6 px-4 pb-28 pt-6">
+    <div className="mx-auto flex max-w-md flex-col gap-6 pb-24">
       <div>
-        <Link href={`/projects/${projectId}/form-views`} className="text-xs text-charcoal/50 underline">
+        <Link href={`/form-views/${projectId}`} className="text-xs text-charcoal/50 underline">
           ← Form Views
         </Link>
         <h1 className="mt-2 font-sans text-xl font-extrabold text-charcoal">{formView.name}</h1>

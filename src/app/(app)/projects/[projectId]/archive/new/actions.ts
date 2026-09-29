@@ -15,10 +15,7 @@ import {
 import { resolveSkill } from "@/lib/data/providers";
 import { runFieldGeneration, type GenerationSource } from "@/lib/ai/tasks";
 import { fetchPageText } from "@/lib/ai/url-source";
-import type { FormField, StoredFileMeta } from "@/lib/types";
-
-/** A file already sitting in storage, uploaded by the browser but not yet attached to a saved record. */
-export type StagedFile = { path: string; name: string; type: string; thumbPath: string | null };
+import type { FormField, StagedFile, StoredFileMeta } from "@/lib/types";
 
 /**
  * Finds a file-type source field's file in storage: a just-uploaded one sent

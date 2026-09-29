@@ -160,7 +160,7 @@ export function ArchiveExplorer({
               This project&rsquo;s structure lives in the Form Builder →
             </Link>
             <Link
-              href={`/projects/${projectId}/form-views`}
+              href={`/form-views/${projectId}`}
               className="flex items-center gap-1.5 font-sans text-sm font-extrabold text-charcoal underline decoration-yellow decoration-2 underline-offset-4 hover:text-charcoal/70"
             >
               <Smartphone className="h-4 w-4" />
