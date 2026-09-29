@@ -52,7 +52,7 @@ export function FormViewsList({
   return (
     <div className="flex flex-col gap-4">
       <div className="flex justify-end">
-        <Link href={`/projects/${projectId}/form-views/new`}>
+        <Link href={`/form-views/${projectId}/new`}>
           <Button disabled={manualFieldCount === 0}>+ New Form View</Button>
         </Link>
       </div>
@@ -84,7 +84,7 @@ export function FormViewsList({
                 <tr key={v.id} className={tableRowClass(i)}>
                   <td className="px-4 py-3">
                     <Link
-                      href={`/projects/${projectId}/form-views/${v.id}`}
+                      href={`/form-views/${projectId}/${v.id}`}
                       className="font-bold text-charcoal underline decoration-yellow decoration-2 underline-offset-2 hover:text-charcoal/70"
                     >
                       {v.name}
@@ -100,7 +100,7 @@ export function FormViewsList({
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-2">
-                      <Link href={`/projects/${projectId}/form-views/${v.id}/fill`}>
+                      <Link href={`/form-views/${projectId}/${v.id}/fill`}>
                         <Button variant="secondary" className="px-3 py-1.5 text-xs">
                           <Smartphone className="h-3.5 w-3.5" /> Fill
                         </Button>

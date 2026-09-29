@@ -1,11 +1,11 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import type { FormField } from "@/lib/types";
+import type { FormField, StagedFile } from "@/lib/types";
 import { Button, Card, Field, Input, Label } from "@/components/ui";
 import { FieldValueInput } from "@/components/FieldValueInput";
-import { createArchiveItemAction, generateAutomatedFieldsAction, type StagedFile } from "./actions";
-import { FileUploadField } from "../FileUploadField";
+import { FileUploadField } from "@/components/FileUploadField";
+import { createArchiveItemAction, generateAutomatedFieldsAction } from "./actions";
 import { GeneratedFieldsCard } from "../GeneratedFieldsCard";
 
 export function NewArchiveItemForm({

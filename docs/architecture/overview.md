@@ -31,16 +31,19 @@ src/
         projects/              Project list + create; [projectId]/access = member management
         users/                 Invite, promote/demote admin, remove
         settings/              AI Providers + Task assignments
-      projects/[projectId]/    Project shell: Archive, Form Builder, Form Views, Create
+      projects/[projectId]/    Project shell: Archive, Form Builder, Create
         archive/                 Record table, detail/edit, new-record flow
         form-builder/            Per-project field schema editor
-        form-views/              Editor-only, mobile-first subset-of-fields templates
         create/                  RAG-grounded chat (open to every project role)
+    form-views/[projectId]/   Editor-only, mobile-first subset-of-fields templates —
+                                deliberately OUTSIDE (app): no sidebar, no project
+                                Shell, own minimal layout.tsx (see "Form Views" below)
     login/                     Sign-in (password or magic link, visitor's choice)
     auth/
       confirm/route.ts         Verifies invite/magic-link/recovery email links
       set-password/            Where invite & recovery links land
-  components/                  Shared UI (Shell, Sidebar, ui.tsx primitives)
+  components/                  Shared UI (Shell, Sidebar, ui.tsx primitives,
+                                FieldValueInput, FileUploadField)
   lib/
     supabase/
       server.ts                Service-role Supabase client (server-only, table access)
@@ -49,6 +52,9 @@ src/
     auth/
       session.ts               getCurrentUser + all requireX authorization guards
       actions.ts                signOutAction
+    actions/
+      uploads.ts               Signed-upload Server Actions, shared by every
+                                file-picking surface (not route-specific)
     data/                      Typed CRUD per entity (projects, providers,
                                 fields, archive, formViews, chat, users/profiles/project_members)
     ai/
@@ -163,18 +169,31 @@ is saved and previews show immediately. See
 
 ## Form Views
 
-A Form View (`src/lib/data/formViews.ts`,
-`src/app/projects/[projectId]/form-views/`) is a saved, named subset of a
-project's **manual** fields (automated fields can't be hand-filled, so
-they're never offered), in a chosen order, rendered as a single mobile-first
-scrolling page instead of the full Form Builder layout. It's an alternate
-*creation* flow, not an edit surface: saving always calls `createArchiveItem`
-with an auto-generated title (`"{view name} — {timestamp}"`) and only sets
-values for the fields on that view — exactly like "New archive record",
-just narrowed and reusable. An editor completes the rest later from the
-normal item editor. Gated at editor+ throughout (both managing and filling
-Form Views), so this adds no new permission surface — see
-[Access & roles](#access--roles) below.
+A Form View (`src/lib/data/formViews.ts`, `src/app/form-views/[projectId]/`)
+is a saved, named subset of a project's **manual** fields (automated fields
+can't be hand-filled, so they're never offered), in a chosen order, rendered
+as a single mobile-first scrolling page instead of the full Form Builder
+layout. It's an alternate *creation* flow, not an edit surface: saving always
+calls `createArchiveItem` with an auto-generated title
+(`"{view name} — {timestamp}"`) and only sets values for the fields on that
+view — exactly like "New archive record", just narrowed and reusable. An
+editor completes the rest later from the normal item editor. Gated at
+editor+ throughout (both managing and filling Form Views), so this adds no
+new permission surface — see [Access & roles](#access--roles) below.
+
+Its routes live at `src/app/form-views/[projectId]/...`, **outside** the
+`(app)` route group on purpose: `(app)/layout.tsx`'s sidebar and
+`projects/[projectId]/layout.tsx`'s header/role-badge Shell would otherwise
+wrap every page (Next.js layouts always nest with their file-system
+ancestors — there's no way to opt a subtree out while staying nested under
+them). Google Forms draws the same line: its build and fill views never sit
+next to Drive's own navigation. `form-views/[projectId]/layout.tsx` supplies
+its own minimal chrome instead (just a link back to that project's Archive)
+and, since it's outside `(app)`, isn't covered by that layout's `requireUser()`
+call — every Form Views page and action re-checks
+`requireProjectAccessPage`/`requireProjectRoleAction` itself regardless (the
+same defense-in-depth already true of every Server Action in this app), so
+moving it outside `(app)` changes nothing about who can reach it.
 
 Free-text fields (`text`, `long_text`) get an optional dictation button
 (`src/components/FieldValueInput.tsx`, shared with the main create/edit
