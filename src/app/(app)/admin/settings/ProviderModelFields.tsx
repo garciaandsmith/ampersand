@@ -115,7 +115,7 @@ export function ProviderModelFields({
       name="providerId"
       value={providerId}
       onChange={(e) => handleProviderChange(e.target.value)}
-      className="min-w-[160px]"
+      className="min-w-[140px]"
     >
       <option value="">— none —</option>
       {providers.map((p) => (
@@ -132,7 +132,7 @@ export function ProviderModelFields({
       name="model"
       value={selectedModelId}
       onChange={(e) => handleModelChange(e.target.value)}
-      className="min-w-[220px]"
+      className="min-w-[180px]"
       disabled={!provider}
     >
       <option value="">{provider ? "— select a model —" : "— pick a provider first —"}</option>
@@ -159,7 +159,7 @@ export function ProviderModelFields({
       name="kind"
       value={kind}
       onChange={(e) => handleKindChange(e.target.value as SkillKind)}
-      className="min-w-[190px]"
+      className="min-w-[150px]"
     >
       {(Object.keys(SKILL_KIND_LABELS) as SkillKind[]).map((k) => (
         <option key={k} value={k}>
@@ -177,7 +177,7 @@ export function ProviderModelFields({
       value={effortValue}
       onChange={(e) => setEffort(e.target.value)}
       disabled={effortUnavailable}
-      className="min-w-[150px]"
+      className="min-w-[130px]"
     >
       {isTranscription ? (
         <option value="">Not used for transcription</option>
@@ -219,7 +219,7 @@ export function ProviderModelFields({
             ? "Not available for this model"
             : `Default ${DEFAULT_MAX_OUTPUT_TOKENS.toLocaleString("en-US")}`
       }
-      className="min-w-[130px]"
+      className="min-w-[110px]"
     />
   );
 

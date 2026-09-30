@@ -35,7 +35,7 @@ export default async function SettingsPage() {
     <div className="flex flex-col gap-10">
       <section>
         <h2 className="mb-4 font-sans text-base font-extrabold">AI Providers</h2>
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_320px]">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
           <Table>
             <thead>
               <tr>
