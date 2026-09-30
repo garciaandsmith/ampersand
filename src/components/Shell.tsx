@@ -14,8 +14,8 @@ export function Shell({
   children: ReactNode;
 }) {
   return (
-    <div className="flex min-h-screen flex-1 flex-col">
-      <header className="flex items-center justify-between border-b border-charcoal/10 bg-paper px-8 py-4">
+    <div className="flex min-h-screen min-w-0 flex-1 flex-col">
+      <header className="flex items-center justify-between gap-4 border-b border-charcoal/10 bg-paper px-8 py-4">
         <div>
           {eyebrow ? (
             <div className="text-xs font-semibold uppercase tracking-wide text-charcoal/50">
