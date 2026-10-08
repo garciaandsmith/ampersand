@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ListChecks, Sparkles } from "lucide-react";
+import { ListChecks, Sparkles, Zap } from "lucide-react";
 import type { FormField } from "@/lib/types";
 import { Badge, Button, Card, Field, IconButton, Label, MultiSelect, Select, Textarea } from "@/components/ui";
 
@@ -172,6 +172,7 @@ export function GeneratedFieldsCard({
       ) : (
         fields.map((f) => {
           const isGenerating = generatingIds.includes(f.id);
+          const isJson = f.automation_kind === "json_extract";
           return (
             <Field key={f.id}>
               <div className="mb-1 flex items-center justify-between">
@@ -200,13 +201,13 @@ export function GeneratedFieldsCard({
                     </Label>
                     <IconButton
                       type="button"
-                      title={disabled && disabledHint ? disabledHint : "Generate with AI"}
-                      aria-label={`Generate ${f.name} with AI`}
+                      title={disabled && disabledHint ? disabledHint : isJson ? "Extract from JSON" : "Generate with AI"}
+                      aria-label={isJson ? `Extract ${f.name} from JSON` : `Generate ${f.name} with AI`}
                       onClick={() => onGenerate([f.id])}
                       disabled={disabled || busy}
                       className={isGenerating ? "animate-pulse" : ""}
                     >
-                      <Sparkles className="h-3.5 w-3.5" />
+                      {isJson ? <Zap className="h-3.5 w-3.5" /> : <Sparkles className="h-3.5 w-3.5" />}
                     </IconButton>
                   </>
                 )}
